@@ -8,6 +8,34 @@ L’objectif est d’éviter qu’une mise à jour ajoute du nouveau code au-des
 
 Les données utilisateur appartiennent au **Data Vault**. Elles doivent rester indépendantes du code, de la version de TL et du disque choisi pour les applications.
 
+## Distribution publique
+
+Pour Windows, le site public Taikeron doit distribuer **Taikeron Launcher**, pas Taikeron Lab directement.
+
+Flux public cible :
+
+```text
+Site Taikeron
+   ↓
+Télécharger Taikeron Launcher
+   ↓
+Launcher
+   ├─ Installer / mettre à jour Taikeron Lab
+   ├─ Installer / mettre à jour Taikeron Map Builder
+   └─ Gérer les futures applications Windows Taikeron
+```
+
+Règles :
+
+- le bouton principal Windows du site pointe vers la dernière release stable du Launcher ;
+- Taikeron Lab reste publié sous forme de paquet/release afin que le Launcher puisse le télécharger, mais le site ne doit plus proposer son EXE comme chemin public principal ;
+- Taikeron Map Builder pourra lui aussi être installé depuis le Launcher ;
+- Taikeron App Android reste distribuée séparément, car elle n’est pas installée par le Launcher Windows ;
+- le dépôt source `Taikeron-Launcher` peut rester privé ; le binaire stable du Launcher doit être publié sur un canal public accessible sans compte GitHub ;
+- le site ne bascule vers le Launcher qu’après publication d’une première release stable réellement téléchargeable, afin de ne jamais remplacer un lien TL fonctionnel par un lien mort.
+
+Le canal public cible du Launcher doit exposer au minimum : version, URL, nom de fichier, taille, SHA-256 et date de publication, sur le même principe que le manifeste stable TL actuel.
+
 ## Emplacements configurables
 
 Le launcher conserve une configuration centrale dans :
@@ -92,6 +120,7 @@ Le worker est séparé du runtime TL afin de pouvoir remplacer TL alors que TL e
 ## Invariants publics
 
 - Une seule installation canonique de chaque application gérée par le launcher.
+- Le site public Windows distribue le Launcher et non TL directement.
 - Aucun raccourci public ne doit viser une copie historique de TL.
 - Une mise à jour ne fusionne jamais deux runtimes.
 - Les anciens fichiers applicatifs doivent être réellement supprimés avant installation du nouveau code.
@@ -122,6 +151,7 @@ La v0.2.0 met en place :
 - snapshots versionnés ;
 - rétention configurable ;
 - manifeste d’intégrité et vérification SHA-256 fichier par fichier ;
-- gestion d’un disque de sauvegarde absent.
+- gestion d’un disque de sauvegarde absent ;
+- règle de distribution publique Launcher-first.
 
 La suppression/reconstruction atomique du dossier TL sera assurée par le worker externe lors de l’étape suivante. Le déplacement vérifié d’un Data Vault existant et les sauvegardes autonomes lorsque le launcher est fermé sont également des étapes séparées.
