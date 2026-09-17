@@ -103,7 +103,6 @@ internal static class ProgramV2
             };
             startInfo.ArgumentList.Add("/S");
             startInfo.ArgumentList.Add("--updated");
-            startInfo.ArgumentList.Add("--force-run");
             startInfo.ArgumentList.Add("/D=" + installDirectory);
 
             using (var installerProcess = Process.Start(startInfo)
