@@ -1,7 +1,7 @@
 {
   "version": "0.4.1",
-  "requestedAtUtc": "2026-09-17T22:50:00Z",
+  "requestedAtUtc": "2026-09-17T22:55:30Z",
   "channel": "stable",
   "runner": "github-hosted-windows",
-  "reason": "Publish first stable public Taikeron Launcher release"
+  "reason": "Retry first stable public release after release-step fix"
 }
