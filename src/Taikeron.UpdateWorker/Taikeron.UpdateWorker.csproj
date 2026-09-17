@@ -6,6 +6,10 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>TaikeronUpdateWorker</AssemblyName>
     <RootNamespace>Taikeron.UpdateWorker</RootNamespace>
-    <Version>0.3.0</Version>
+    <Version>0.4.0</Version>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
   </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="ProgramV2.cs" />
+  </ItemGroup>
 </Project>
