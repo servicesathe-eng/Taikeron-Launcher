@@ -108,7 +108,7 @@ jobs:
           if-no-files-found: error
 
       - name: Publish GitHub release
-        if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.added, '.github/release/launcher-release.json') || contains(github.event.head_commit.modified, '.github/release/launcher-release.json')
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, 'Release Launcher ')
         shell: powershell
         env:
           GH_TOKEN: ${{ github.token }}
