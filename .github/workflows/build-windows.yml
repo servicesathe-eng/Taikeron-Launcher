@@ -1,0 +1,34 @@
+name: Build Taikeron Launcher
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore src/Taikeron.Launcher/Taikeron.Launcher.csproj
+
+      - name: Build
+        run: dotnet build src/Taikeron.Launcher/Taikeron.Launcher.csproj -c Release --no-restore
+
+      - name: Publish portable Windows build
+        run: dotnet publish src/Taikeron.Launcher/Taikeron.Launcher.csproj -c Release -r win-x64 --self-contained false -o artifacts/TaikeronLauncher
+
+      - name: Upload launcher artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Taikeron-Launcher-win-x64
+          path: artifacts/TaikeronLauncher
+          if-no-files-found: error
