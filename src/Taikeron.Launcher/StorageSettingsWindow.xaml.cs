@@ -173,6 +173,7 @@ public partial class StorageSettingsWindow : Window
                 MapsRoot = maps,
                 DownloadsRoot = downloads,
                 BackupRoot = backup,
+                InitialSetupCompleted = current.InitialSetupCompleted,
                 AutomaticBackupEnabled = AutomaticBackupCheck.IsChecked == true,
                 BackupIntervalHours = interval,
                 BackupRetentionCount = retention,
