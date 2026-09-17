@@ -69,7 +69,13 @@ public sealed class VaultBackupService
 
         try
         {
-            var files = Directory.EnumerateFiles(vault, "*", SearchOption.AllDirectories).ToList();
+            var mapsRoot = string.IsNullOrWhiteSpace(settings.MapsRoot)
+                ? string.Empty
+                : Path.GetFullPath(settings.MapsRoot).TrimEnd(Path.DirectorySeparatorChar);
+
+            var files = Directory.EnumerateFiles(vault, "*", SearchOption.AllDirectories)
+                .Where(path => string.IsNullOrWhiteSpace(mapsRoot) || !IsSameOrNested(Path.GetFullPath(path), mapsRoot))
+                .ToList();
             var totalBytes = files.Sum(path => new FileInfo(path).Length);
             long copiedBytes = 0;
             var manifestEntries = new List<BackupManifestEntry>(files.Count);
