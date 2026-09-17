@@ -23,6 +23,8 @@ internal static class ProgramV2
         ReplaceRequest? request = null;
         string? resultFile = null;
         string? preservedMapsPath = null;
+        string? migratedDataRoot = null;
+        string? migratedMapsRoot = null;
         var oldCodeRemoved = false;
 
         try
@@ -63,6 +65,13 @@ internal static class ProgramV2
             var executablePath = Path.GetFullPath(request.ExecutablePath);
             ValidateInstallTarget(installDirectory, executablePath);
 
+            var dataVaultRoot = Path.GetFullPath(request.DataVaultRoot)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            var mapsRoot = Path.GetFullPath(request.MapsRoot)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            ValidatePersistentTarget(dataVaultRoot, installDirectory, "Data Vault");
+            ValidatePersistentTarget(mapsRoot, installDirectory, "Maps");
+
             var oldAsar = Path.Combine(installDirectory, "resources", "app.asar");
             var oldAsarSha = File.Exists(oldAsar) ? await ComputeSha256Async(oldAsar) : null;
             var oldExeSha = File.Exists(executablePath) ? await ComputeSha256Async(executablePath) : null;
@@ -70,16 +79,17 @@ internal static class ProgramV2
             WriteStatus(statusFile, "closing", "Fermeture complète de Taikeron Lab.");
             await StopTaikeronLabAsync(installDirectory);
 
-            var mapsSource = Path.Combine(installDirectory, "maps");
-            if (Directory.Exists(mapsSource))
-            {
-                preservedMapsPath = Path.Combine(jobDirectory, "preserved-maps");
-                if (Directory.Exists(preservedMapsPath))
-                    Directory.Delete(preservedMapsPath, true);
+            WriteStatus(statusFile, "preserving-data", "Migration des données persistantes hors du dossier application.");
+            migratedDataRoot = MigrateLegacyPersistentData(
+                installDirectory,
+                dataVaultRoot,
+                jobDirectory);
 
-                WriteStatus(statusFile, "preserving-data", "Protection des cartes locales avant nettoyage.");
-                MoveOrCopyDirectory(mapsSource, preservedMapsPath);
-            }
+            migratedMapsRoot = MigrateLegacyMaps(
+                installDirectory,
+                mapsRoot,
+                jobDirectory,
+                out preservedMapsPath);
 
             if (Directory.Exists(installDirectory))
             {
@@ -148,16 +158,6 @@ internal static class ProgramV2
                 }
             }
 
-            if (!string.IsNullOrWhiteSpace(preservedMapsPath) && Directory.Exists(preservedMapsPath))
-            {
-                WriteStatus(statusFile, "restoring-data", "Restauration des cartes locales.");
-                var mapsDestination = Path.Combine(installDirectory, "maps");
-                if (Directory.Exists(mapsDestination))
-                    Directory.Delete(mapsDestination, true);
-                MoveOrCopyDirectory(preservedMapsPath, mapsDestination);
-                preservedMapsPath = null;
-            }
-
             await WriteJsonAsync(resultFile, new ReplaceResult
             {
                 Ok = true,
@@ -169,6 +169,8 @@ internal static class ProgramV2
                 OldAsarSha256 = oldAsarSha,
                 NewAsarSha256 = newAsarSha,
                 InstallerSha256 = installerSha,
+                MigratedDataRoot = migratedDataRoot,
+                MigratedMapsRoot = migratedMapsRoot,
                 CompletedAtUtc = DateTimeOffset.UtcNow
             });
 
@@ -189,6 +191,8 @@ internal static class ProgramV2
                         ExecutablePath = request?.ExecutablePath ?? string.Empty,
                         OldCodeRemoved = oldCodeRemoved,
                         PreservedMapsPath = preservedMapsPath,
+                        MigratedDataRoot = migratedDataRoot,
+                        MigratedMapsRoot = migratedMapsRoot,
                         Error = ex.Message,
                         CompletedAtUtc = DateTimeOffset.UtcNow
                     });
@@ -212,6 +216,8 @@ internal static class ProgramV2
             throw new InvalidDataException("Paquet TL ou SHA-256 absent de la requête.");
         if (string.IsNullOrWhiteSpace(request.InstallDirectory) || string.IsNullOrWhiteSpace(request.ExecutablePath))
             throw new InvalidDataException("Cible d’installation TL absente de la requête.");
+        if (string.IsNullOrWhiteSpace(request.DataVaultRoot) || string.IsNullOrWhiteSpace(request.MapsRoot))
+            throw new InvalidDataException("Emplacements persistants Data Vault / Maps absents de la requête.");
         if (string.IsNullOrWhiteSpace(request.ResultFile) || string.IsNullOrWhiteSpace(request.StatusFile) || string.IsNullOrWhiteSpace(request.JobDirectory))
             throw new InvalidDataException("Fichiers de suivi worker absents de la requête.");
     }
@@ -256,6 +262,84 @@ internal static class ProgramV2
         {
             throw new InvalidOperationException("Le dossier cible existe mais ne contient pas Taikeron Lab.exe. Nettoyage refusé.");
         }
+    }
+
+    private static void ValidatePersistentTarget(string persistentRoot, string installDirectory, string label)
+    {
+        if (string.IsNullOrWhiteSpace(persistentRoot))
+            throw new InvalidOperationException($"{label} non configuré.");
+
+        var root = Path.GetPathRoot(persistentRoot)?.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        if (string.IsNullOrWhiteSpace(root) || string.Equals(root, persistentRoot, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException($"{label} ne peut pas être une racine de disque.");
+
+        if (string.Equals(persistentRoot, installDirectory, StringComparison.OrdinalIgnoreCase)
+            || IsPathInside(persistentRoot, installDirectory))
+        {
+            throw new InvalidOperationException($"{label} doit être extérieur au dossier d’installation TL.");
+        }
+
+        Directory.CreateDirectory(persistentRoot);
+    }
+
+    private static string? MigrateLegacyPersistentData(
+        string installDirectory,
+        string dataVaultRoot,
+        string jobDirectory)
+    {
+        var migratedAny = false;
+        foreach (var name in new[] { "data", "vault" })
+        {
+            var source = Path.Combine(installDirectory, name);
+            if (!Directory.Exists(source))
+                continue;
+
+            var destination = Path.Combine(dataVaultRoot, name);
+            if (!Directory.Exists(destination) || !Directory.EnumerateFileSystemEntries(destination).Any())
+            {
+                if (Directory.Exists(destination))
+                    Directory.Delete(destination, true);
+                MoveOrCopyDirectory(source, destination);
+                migratedAny = true;
+                continue;
+            }
+
+            // Un Data Vault déjà peuplé reste la référence. On conserve l’ancien
+            // dossier sans l’écraser, afin qu’aucune donnée ne soit perdue.
+            var preserved = Path.Combine(jobDirectory, "legacy-persistent-data", name);
+            if (Directory.Exists(preserved))
+                Directory.Delete(preserved, true);
+            MoveOrCopyDirectory(source, preserved);
+            migratedAny = true;
+        }
+
+        return migratedAny ? dataVaultRoot : null;
+    }
+
+    private static string? MigrateLegacyMaps(
+        string installDirectory,
+        string mapsRoot,
+        string jobDirectory,
+        out string? preservedMapsPath)
+    {
+        preservedMapsPath = null;
+        var source = Path.Combine(installDirectory, "maps");
+        if (!Directory.Exists(source))
+            return null;
+
+        if (!Directory.Exists(mapsRoot) || !Directory.EnumerateFileSystemEntries(mapsRoot).Any())
+        {
+            if (Directory.Exists(mapsRoot))
+                Directory.Delete(mapsRoot, true);
+            MoveOrCopyDirectory(source, mapsRoot);
+            return mapsRoot;
+        }
+
+        preservedMapsPath = Path.Combine(jobDirectory, "legacy-maps");
+        if (Directory.Exists(preservedMapsPath))
+            Directory.Delete(preservedMapsPath, true);
+        MoveOrCopyDirectory(source, preservedMapsPath);
+        return mapsRoot;
     }
 
     private static async Task StopTaikeronLabAsync(string installDirectory)
@@ -437,6 +521,8 @@ internal sealed class ReplaceRequest
     public string ExecutablePath { get; set; } = string.Empty;
     public string CurrentVersion { get; set; } = string.Empty;
     public string TargetVersion { get; set; } = string.Empty;
+    public string DataVaultRoot { get; set; } = string.Empty;
+    public string MapsRoot { get; set; } = string.Empty;
     public string JobDirectory { get; set; } = string.Empty;
     public string StatusFile { get; set; } = string.Empty;
     public string ResultFile { get; set; } = string.Empty;
@@ -454,6 +540,8 @@ internal sealed class ReplaceResult
     public string? NewAsarSha256 { get; set; }
     public string? InstallerSha256 { get; set; }
     public string? PreservedMapsPath { get; set; }
+    public string? MigratedDataRoot { get; set; }
+    public string? MigratedMapsRoot { get; set; }
     public string? Error { get; set; }
     public DateTimeOffset CompletedAtUtc { get; set; }
 }
