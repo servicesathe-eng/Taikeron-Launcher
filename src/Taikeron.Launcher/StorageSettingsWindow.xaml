@@ -1,0 +1,123 @@
+<Window x:Class="Taikeron.Launcher.StorageSettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Taikeron — Stockage & sauvegardes"
+        Width="820" Height="700"
+        MinWidth="760" MinHeight="620"
+        WindowStartupLocation="CenterOwner"
+        Background="{StaticResource Bg}"
+        Foreground="{StaticResource Text}">
+    <Window.Resources>
+        <Style TargetType="TextBox" x:Key="PathBox">
+            <Setter Property="Background" Value="#081924"/>
+            <Setter Property="Foreground" Value="{StaticResource Text}"/>
+            <Setter Property="BorderBrush" Value="#3B5060"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="10,8"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="22">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="12"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="12"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0">
+            <TextBlock Text="Stockage &amp; sauvegardes" FontSize="26" FontWeight="SemiBold"/>
+            <TextBlock Text="Le code peut rester sur C:, le Data Vault sur un autre disque et les sauvegardes sur un troisième support." Foreground="{StaticResource Muted}" Margin="0,5,0,0" TextWrapping="Wrap"/>
+        </StackPanel>
+
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+                <Border Background="{StaticResource Panel}" BorderBrush="{StaticResource Gold}" BorderThickness="1" CornerRadius="8" Padding="16">
+                    <StackPanel>
+                        <TextBlock Text="Emplacements Taikeron" FontSize="17" FontWeight="SemiBold"/>
+                        <TextBlock Text="Applications = code remplaçable. Data Vault = données persistantes privées." Foreground="{StaticResource Muted}" FontSize="12" Margin="0,4,0,14"/>
+
+                        <TextBlock Text="Applications" FontWeight="SemiBold"/>
+                        <Grid Margin="0,5,0,12">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="8"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <TextBox x:Name="AppsRootBox" Style="{StaticResource PathBox}"/>
+                            <Button Grid.Column="2" Content="Parcourir" Style="{StaticResource ActionButton}" Padding="14,8" Click="BrowseApps_Click"/>
+                        </Grid>
+
+                        <TextBlock Text="Data Vault" FontWeight="SemiBold"/>
+                        <Grid Margin="0,5,0,12">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="8"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <TextBox x:Name="VaultRootBox" Style="{StaticResource PathBox}"/>
+                            <Button Grid.Column="2" Content="Parcourir" Style="{StaticResource ActionButton}" Padding="14,8" Click="BrowseVault_Click"/>
+                        </Grid>
+
+                        <TextBlock Text="Cartes" FontWeight="SemiBold"/>
+                        <Grid Margin="0,5,0,12">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="8"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <TextBox x:Name="MapsRootBox" Style="{StaticResource PathBox}"/>
+                            <Button Grid.Column="2" Content="Parcourir" Style="{StaticResource ActionButton}" Padding="14,8" Click="BrowseMaps_Click"/>
+                        </Grid>
+
+                        <TextBlock Text="Téléchargements temporaires" FontWeight="SemiBold"/>
+                        <Grid Margin="0,5,0,0">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="8"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <TextBox x:Name="DownloadsRootBox" Style="{StaticResource PathBox}"/>
+                            <Button Grid.Column="2" Content="Parcourir" Style="{StaticResource ActionButton}" Padding="14,8" Click="BrowseDownloads_Click"/>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <Border Background="{StaticResource Panel}" BorderBrush="{StaticResource Gold}" BorderThickness="1" CornerRadius="8" Padding="16" Margin="0,14,0,0">
+                    <StackPanel>
+                        <TextBlock Text="Sauvegarde automatique du Data Vault" FontSize="17" FontWeight="SemiBold"/>
+                        <TextBlock Text="Sauvegarde locale uniquement. Aucun cloud n’est requis." Foreground="{StaticResource Muted}" FontSize="12" Margin="0,4,0,14"/>
+
+                        <TextBlock Text="Destination de sauvegarde" FontWeight="SemiBold"/>
+                        <Grid Margin="0,5,0,10">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="8"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <TextBox x:Name="BackupRootBox" Style="{StaticResource PathBox}"/>
+                            <Button Grid.Column="2" Content="Parcourir" Style="{StaticResource ActionButton}" Padding="14,8" Click="BrowseBackup_Click"/>
+                        </Grid>
+
+                        <CheckBox x:Name="AutomaticBackupCheck" Content="Activer la sauvegarde automatique" Foreground="{StaticResource Text}" Margin="0,4,0,12"/>
+
+                        <Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="18"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Fréquence (heures)" FontWeight="SemiBold"/>
+                                <TextBox x:Name="BackupIntervalBox" Style="{StaticResource PathBox}" Margin="0,5,0,0"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="Snapshots à conserver" FontWeight="SemiBold"/>
+                                <TextBox x:Name="RetentionBox" Style="{StaticResource PathBox}" Margin="0,5,0,0"/>
+                            </StackPanel>
+                        </Grid>
+
+                        <CheckBox x:Name="VerifyHashesCheck" Content="Vérifier chaque fichier par SHA-256 après copie" IsChecked="True" Foreground="{StaticResource Text}" Margin="0,12,0,0"/>
+
+                        <Border Background="#081924" BorderBrush="#304858" BorderThickness="1" CornerRadius="7" Padding="12" Margin="0,14,0,0">
+                            <StackPanel>
+                                <TextBlock x:Name="BackupTargetStateText" Text="Destination non configurée" FontWeight="SemiBold"/>
+                                <TextBlock x:Name="LastBackupText" Text="Dernière sauvegarde : aucune" Foreground="{StaticResource Muted}" FontSize="12" Margin="0,5,0,0"/>
+                                <ProgressBar x:Name="BackupProgressBar" Height="5" Minimum="0" Maximum="100" Visibility="Collapsed" Margin="0,10,0,0" Foreground="{StaticResource GoldBright}" Background="#20313E"/>
+                                <TextBlock x:Name="BackupProgressText" Foreground="{StaticResource Muted}" FontSize="11" Margin="0,6,0,0" TextTrimming="CharacterEllipsis"/>
+                            </StackPanel>
+                        </Border>
+
+                        <Button x:Name="BackupNowButton" Content="Sauvegarder maintenant" Style="{StaticResource GoldButton}" HorizontalAlignment="Left" Margin="0,12,0,0" Click="BackupNow_Click"/>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+
+        <Grid Grid.Row="4">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="10"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <TextBlock Text="Les changements de chemin définissent les emplacements centraux du launcher. Le déplacement automatique des données sera ajouté séparément pour éviter toute perte." Foreground="{StaticResource Muted}" FontSize="11" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,20,0"/>
+            <Button Grid.Column="1" Content="Annuler" Style="{StaticResource ActionButton}" Click="Cancel_Click"/>
+            <Button Grid.Column="3" Content="Enregistrer" Style="{StaticResource GoldButton}" Click="Save_Click"/>
+        </Grid>
+    </Grid>
+</Window>
