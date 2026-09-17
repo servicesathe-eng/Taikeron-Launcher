@@ -82,7 +82,7 @@ public sealed class LauncherSettingsService
         var defaults = LauncherSettings.CreateDefault();
         settings.AppsRoot = string.IsNullOrWhiteSpace(settings.AppsRoot) ? defaults.AppsRoot : NormalizePath(settings.AppsRoot);
         settings.DataVaultRoot = string.IsNullOrWhiteSpace(settings.DataVaultRoot) ? defaults.DataVaultRoot : NormalizePath(settings.DataVaultRoot);
-        settings.MapsRoot = string.IsNullOrWhiteSpace(settings.MapsRoot) ? Path.Combine(settings.DataVaultRoot, "Maps") : NormalizePath(settings.MapsRoot);
+        settings.MapsRoot = string.IsNullOrWhiteSpace(settings.MapsRoot) ? DefaultMapsRoot(settings.DataVaultRoot) : NormalizePath(settings.MapsRoot);
         settings.DownloadsRoot = string.IsNullOrWhiteSpace(settings.DownloadsRoot) ? defaults.DownloadsRoot : NormalizePath(settings.DownloadsRoot);
         settings.BackupRoot = string.IsNullOrWhiteSpace(settings.BackupRoot) ? string.Empty : NormalizePath(settings.BackupRoot);
         settings.BackupIntervalHours = Math.Clamp(settings.BackupIntervalHours, 1, 24 * 30);
@@ -90,6 +90,13 @@ public sealed class LauncherSettingsService
         settings.LastBackupStatus = string.IsNullOrWhiteSpace(settings.LastBackupStatus)
             ? "Aucune sauvegarde effectuée"
             : settings.LastBackupStatus;
+    }
+
+    private static string DefaultMapsRoot(string dataVaultRoot)
+    {
+        var vault = NormalizePath(dataVaultRoot);
+        var parent = Directory.GetParent(vault)?.FullName;
+        return Path.Combine(string.IsNullOrWhiteSpace(parent) ? vault : parent, "Maps");
     }
 
     private static void CreateIfDriveReady(string path)
