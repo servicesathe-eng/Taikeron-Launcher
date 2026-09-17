@@ -57,22 +57,33 @@ public sealed class TaikeronLabService
         response.EnsureSuccessStatusCode();
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
 
-        return await JsonSerializer.DeserializeAsync<TlReleaseManifest>(stream, new JsonSerializerOptions
+        var manifest = await JsonSerializer.DeserializeAsync<TlReleaseManifest>(stream, new JsonSerializerOptions
         {
             PropertyNameCaseInsensitive = true
         }, cancellationToken);
+
+        if (manifest is null || !manifest.Available || manifest.WindowsX64 is null)
+            return manifest;
+
+        if (string.IsNullOrWhiteSpace(manifest.Url) || string.IsNullOrWhiteSpace(manifest.Sha256))
+            throw new InvalidDataException("Le manifeste stable TL ne contient pas de paquet windows-x64 vérifiable.");
+
+        return manifest;
     }
 
     public bool IsUpdateAvailable(string? installedVersion, string? remoteVersion)
     {
-        if (string.IsNullOrWhiteSpace(remoteVersion))
+        var localNormalized = NormalizeVersion(installedVersion);
+        var remoteNormalized = NormalizeVersion(remoteVersion);
+
+        if (string.IsNullOrWhiteSpace(remoteNormalized))
             return false;
 
-        if (string.IsNullOrWhiteSpace(installedVersion))
+        if (string.IsNullOrWhiteSpace(localNormalized))
             return true;
 
-        return Version.TryParse(installedVersion, out var local)
-            && Version.TryParse(remoteVersion, out var remote)
+        return Version.TryParse(localNormalized, out var local)
+            && Version.TryParse(remoteNormalized, out var remote)
             && remote > local;
     }
 
@@ -95,6 +106,8 @@ public sealed class TaikeronLabService
     {
         if (string.IsNullOrWhiteSpace(release.Url))
             throw new InvalidOperationException("Le manifeste TL ne contient pas d’URL de téléchargement.");
+        if (string.IsNullOrWhiteSpace(release.Sha256))
+            throw new InvalidOperationException("Le manifeste TL ne contient pas de SHA-256.");
 
         var downloadsDirectory = _settingsService.Current.DownloadsRoot;
         Directory.CreateDirectory(downloadsDirectory);
@@ -137,16 +150,12 @@ public sealed class TaikeronLabService
             throw new InvalidDataException($"Taille invalide : {actualLength} octets reçus, {release.Bytes} attendus.");
         }
 
-        if (!string.IsNullOrWhiteSpace(release.Sha256))
+        var expected = NormalizeSha256(release.Sha256);
+        var actual = await ComputeSha256Async(partial, cancellationToken);
+        if (!string.Equals(expected, actual, StringComparison.OrdinalIgnoreCase))
         {
-            var expected = NormalizeSha256(release.Sha256);
-            var actual = await ComputeSha256Async(partial, cancellationToken);
-
-            if (!string.Equals(expected, actual, StringComparison.OrdinalIgnoreCase))
-            {
-                File.Delete(partial);
-                throw new InvalidDataException("Échec de vérification SHA-256 du paquet Taikeron Lab.");
-            }
+            File.Delete(partial);
+            throw new InvalidDataException("Échec de vérification SHA-256 du paquet Taikeron Lab.");
         }
 
         File.Move(partial, destination, overwrite: true);
@@ -176,7 +185,7 @@ public sealed class TaikeronLabService
         if (string.IsNullOrWhiteSpace(version))
             return null;
 
-        var clean = version.Split('+')[0].Split('-')[0].Trim();
+        var clean = version.Split('+')[0].Trim().Replace('-', '.');
         return Version.TryParse(clean, out var parsed) ? parsed.ToString() : clean;
     }
 }
