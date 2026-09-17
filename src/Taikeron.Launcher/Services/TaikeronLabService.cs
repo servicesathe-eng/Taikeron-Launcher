@@ -10,17 +10,18 @@ public sealed class TaikeronLabService
 {
     public const string StableManifestUrl = "https://taikeron-cyclingos.github.io/releases/tl/stable.json";
 
+    private readonly LauncherSettingsService _settingsService;
     private readonly HttpClient _httpClient = new()
     {
         Timeout = TimeSpan.FromMinutes(10)
     };
 
-    public string CanonicalInstallDirectory => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "Taikeron",
-        "Apps",
-        "Lab");
+    public TaikeronLabService(LauncherSettingsService settingsService)
+    {
+        _settingsService = settingsService;
+    }
 
+    public string CanonicalInstallDirectory => Path.Combine(_settingsService.Current.AppsRoot, "Lab");
     public string CanonicalExecutable => Path.Combine(CanonicalInstallDirectory, "Taikeron Lab.exe");
 
     public string? FindInstalledExecutable()
@@ -95,12 +96,7 @@ public sealed class TaikeronLabService
         if (string.IsNullOrWhiteSpace(release.Url))
             throw new InvalidOperationException("Le manifeste TL ne contient pas d’URL de téléchargement.");
 
-        var downloadsDirectory = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Taikeron",
-            "Launcher",
-            "Downloads");
-
+        var downloadsDirectory = _settingsService.Current.DownloadsRoot;
         Directory.CreateDirectory(downloadsDirectory);
 
         var fileName = string.IsNullOrWhiteSpace(release.File)
