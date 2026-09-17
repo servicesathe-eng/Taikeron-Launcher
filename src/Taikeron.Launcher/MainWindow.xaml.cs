@@ -11,6 +11,7 @@ public partial class MainWindow : Window
     private readonly LauncherSettingsService _settingsService = new();
     private readonly VaultBackupService _backupService = new();
     private readonly TaikeronLabService _labService;
+    private readonly TlUpdateWorkerService _updateWorkerService;
     private readonly DispatcherTimer _backupTimer;
 
     private TlReleaseManifest? _stableRelease;
@@ -21,6 +22,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         _labService = new TaikeronLabService(_settingsService);
+        _updateWorkerService = new TlUpdateWorkerService(_settingsService);
         _backupTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(10) };
         _backupTimer.Tick += async (_, _) => await CheckAutomaticBackupAsync();
 
@@ -66,7 +68,11 @@ public partial class MainWindow : Window
             var updateAvailable = _labService.IsUpdateAvailable(_installedVersion, _stableRelease?.Version);
             UpdateBadge.Visibility = updateAvailable ? Visibility.Visible : Visibility.Collapsed;
             UpdateButton.IsEnabled = _stableRelease is not null;
-            UpdateButton.Content = _installedExecutable is null ? "↓  Télécharger TL" : "↓  Mettre à jour";
+            UpdateButton.Content = _installedExecutable is null
+                ? "↓  Installer TL"
+                : updateAvailable
+                    ? "↓  Mettre à jour"
+                    : "↻  Réinstaller proprement";
 
             if (_installedExecutable is null)
             {
@@ -88,7 +94,7 @@ public partial class MainWindow : Window
                 StatusDot.Fill = (Brush)FindResource("Green");
                 StatusText.Foreground = (Brush)FindResource("Green");
                 StatusText.Text = "Installé · à jour";
-                ActivityText.Text = "Taikeron Lab est à jour.";
+                ActivityText.Text = "Taikeron Lab est à jour. Le launcher peut aussi effectuer une réinstallation propre.";
             }
         }
         catch (Exception ex)
@@ -139,19 +145,51 @@ public partial class MainWindow : Window
 
         try
         {
-            var progress = new Progress<double>(value =>
+            var downloadProgress = new Progress<double>(value =>
             {
                 DownloadProgress.Value = value * 100;
                 ActivityText.Text = $"Téléchargement et vérification… {value:P0}";
             });
 
-            var packagePath = await _labService.DownloadAndVerifyAsync(_stableRelease, progress);
+            var packagePath = await _labService.DownloadAndVerifyAsync(_stableRelease, downloadProgress);
             DownloadProgress.Value = 100;
-            ActivityText.Text = $"Paquet vérifié : {packagePath}";
+            ActivityText.Text = "Paquet vérifié. Le launcher prend maintenant le contrôle de l’installation…";
+
+            var workerProgress = new Progress<TlWorkerStatus>(status =>
+            {
+                ActivityText.Text = status.Message;
+            });
+
+            var result = await _updateWorkerService.ReplaceAsync(
+                packagePath,
+                _stableRelease,
+                _installedExecutable,
+                _installedVersion,
+                workerProgress);
+
+            if (!result.Ok)
+            {
+                var recovery = string.IsNullOrWhiteSpace(result.PreservedMapsPath)
+                    ? string.Empty
+                    : $"\n\nCartes protégées dans :\n{result.PreservedMapsPath}";
+                throw new InvalidOperationException((result.Error ?? "Le remplacement TL a échoué.") + recovery);
+            }
+
+            if (!result.OldCodeRemoved)
+                throw new InvalidOperationException("Le worker n’a pas confirmé la suppression de l’ancien code TL.");
+
+            _installedExecutable = result.ExecutablePath;
+            ActivityText.Text = "Ancien runtime supprimé. Nouveau runtime installé et vérifié.";
+            await RefreshAsync();
+
+            if (File.Exists(result.ExecutablePath))
+                _labService.Launch(result.ExecutablePath);
 
             MessageBox.Show(
-                "Le paquet TL a été téléchargé et vérifié (taille + SHA-256).\n\nLa prochaine étape ajoutera le worker externe qui fermera TL, supprimera réellement l’ancien code puis installera ce paquet de façon atomique.",
-                "Paquet TL prêt",
+                $"Taikeron Lab {_stableRelease.Version} a été installé proprement.\n\n" +
+                "L’ancien dossier code a été supprimé avant l’installation du nouveau runtime.\n" +
+                "Le nouvel app.asar a été vérifié après installation.",
+                "Mise à jour TL terminée",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
         }
@@ -178,8 +216,8 @@ public partial class MainWindow : Window
 
         var settings = _settingsService.Current;
         var message = _installedExecutable is null
-            ? $"TL n’est pas détecté.\n\nDossier code prévu :\n{_labService.CanonicalInstallDirectory}\n\nData Vault :\n{settings.DataVaultRoot}\n\nLa réparation complète sera activée avec le worker d’installation atomique."
-            : $"Installation détectée :\n{_installedExecutable}\n\nVersion : {_installedVersion ?? "inconnue"}\n\nData Vault :\n{settings.DataVaultRoot}\n\nAucun fichier utilisateur n’a été modifié.";
+            ? $"TL n’est pas détecté.\n\nDossier code prévu :\n{_labService.CanonicalInstallDirectory}\n\nData Vault :\n{settings.DataVaultRoot}\n\nLe bouton Installer TL utilisera le worker de nettoyage sécurisé."
+            : $"Installation détectée :\n{_installedExecutable}\n\nVersion : {_installedVersion ?? "inconnue"}\n\nData Vault :\n{settings.DataVaultRoot}\n\nLe bouton Réinstaller proprement supprime l’ancien runtime avant de remettre le paquet stable.";
 
         MessageBox.Show(message, "Diagnostic TL", MessageBoxButton.OK, MessageBoxImage.Information);
     }
