@@ -296,12 +296,18 @@ internal static class ProgramV2
                 continue;
             }
 
+            var isTaikeronLab = false;
             try
             {
-                if (string.Equals(process.ProcessName, "Taikeron Lab", StringComparison.OrdinalIgnoreCase))
-                    yield return process;
+                isTaikeronLab = string.Equals(
+                    process.ProcessName,
+                    "Taikeron Lab",
+                    StringComparison.OrdinalIgnoreCase);
             }
             catch { }
+
+            if (isTaikeronLab)
+                yield return process;
         }
     }
 
