@@ -50,7 +50,8 @@ public partial class FirstInstallWindow : Window
                     "Les emplacements Applications et Données personnelles sont obligatoires.");
             }
 
-            var maps = Path.Combine(vault, "Maps");
+            var vaultParent = Directory.GetParent(vault)?.FullName;
+            var maps = Path.Combine(string.IsNullOrWhiteSpace(vaultParent) ? vault : vaultParent, "Maps");
 
             var tlCodeDirectory = Path.Combine(apps, "Lab");
             if (PathsOverlap(vault, tlCodeDirectory))
