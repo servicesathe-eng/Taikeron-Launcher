@@ -35,7 +35,20 @@
                     <Button Content="⚙  Paramètres" Style="{StaticResource ActionButton}" Padding="15,8" Click="SettingsButton_Click"/>
                 </StackPanel>
 
-                <TextBlock Grid.Column="2" Text="v0.2.0" Foreground="{StaticResource Muted}" VerticalAlignment="Center" FontSize="12"/>
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button x:Name="LauncherSelfUpdateButton"
+                            Content="↑  Mettre à jour le Launcher"
+                            Style="{StaticResource ActionButton}"
+                            Margin="0,0,10,0"
+                            Padding="11,6"
+                            Visibility="Collapsed"
+                            Click="LauncherSelfUpdateButton_Click"/>
+                    <TextBlock x:Name="LauncherVersionText"
+                               Text="v—"
+                               Foreground="{StaticResource Muted}"
+                               VerticalAlignment="Center"
+                               FontSize="12"/>
+                </StackPanel>
             </Grid>
         </Border>
 
