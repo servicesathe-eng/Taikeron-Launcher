@@ -35,7 +35,7 @@
                     <Button Content="⚙  Paramètres" Style="{StaticResource ActionButton}" Padding="15,8" Click="SettingsButton_Click"/>
                 </StackPanel>
 
-                <TextBlock Grid.Column="2" Text="v0.1.0" Foreground="{StaticResource Muted}" VerticalAlignment="Center" FontSize="12"/>
+                <TextBlock Grid.Column="2" Text="v0.2.0" Foreground="{StaticResource Muted}" VerticalAlignment="Center" FontSize="12"/>
             </Grid>
         </Border>
 
