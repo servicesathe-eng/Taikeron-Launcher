@@ -92,11 +92,15 @@ public sealed class TaikeronLabService
         if (!File.Exists(executablePath))
             throw new FileNotFoundException("Taikeron Lab est introuvable.", executablePath);
 
-        Process.Start(new ProcessStartInfo(executablePath)
+        var startInfo = new ProcessStartInfo(executablePath)
         {
-            UseShellExecute = true,
+            UseShellExecute = false,
             WorkingDirectory = Path.GetDirectoryName(executablePath)!
-        });
+        };
+        startInfo.Environment["TAIKERON_DATA_ROOT"] = _settingsService.Current.DataVaultRoot;
+        startInfo.Environment["TAIKERON_MAPS_ROOT"] = _settingsService.Current.MapsRoot;
+
+        Process.Start(startInfo);
     }
 
     public async Task<string> DownloadAndVerifyAsync(
