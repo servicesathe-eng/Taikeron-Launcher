@@ -106,7 +106,7 @@
 
                     <StackPanel Grid.Row="4" Margin="8,16,8,8">
                         <Separator Background="{StaticResource Gold}" Margin="0,0,0,12"/>
-                        <TextBlock Text="PLUS LOIN" FontSize="11" FontWeight="SemiBold" LetterSpacing="2"/>
+                        <TextBlock Text="PLUS LOIN" FontSize="11" FontWeight="SemiBold"/>
                         <TextBlock Text="AVEC VOS PARCOURS" FontSize="11" Foreground="{StaticResource Muted}" Margin="0,4,0,0"/>
                     </StackPanel>
                 </Grid>
