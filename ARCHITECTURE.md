@@ -156,6 +156,7 @@ Si l’ancien code ne peut pas être supprimé, l’installation s’arrête. Un
 - Le site public Windows distribue le Launcher et non TL directement.
 - Aucun raccourci public ne doit viser une copie historique de TL.
 - Une mise à jour ne fusionne jamais deux runtimes.
+- Toute différence de version ou d’intégrité déclenche une réinstallation propre : l’ancien dossier code est supprimé avant installation du paquet officiel ; aucun patch incrémental n’est appliqué sur le runtime existant.
 - Les anciens fichiers applicatifs doivent être réellement supprimés avant installation du nouveau code.
 - Le Launcher distingue `intact`, `non certifié`, `altéré` et `mise à jour disponible`.
 - Un TL dont l’intégrité est connue comme invalide n’est pas lancé par le Launcher.
