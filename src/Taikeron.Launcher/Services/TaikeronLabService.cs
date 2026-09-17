@@ -92,6 +92,11 @@ public sealed class TaikeronLabService
         if (!File.Exists(executablePath))
             throw new FileNotFoundException("Taikeron Lab est introuvable.", executablePath);
 
+        if (!_settingsService.Current.InitialSetupCompleted)
+            throw new InvalidOperationException("Configure d’abord l’emplacement des applications et des données dans le Launcher.");
+
+        EnsureConfiguredDataAvailable(executablePath);
+
         var startInfo = new ProcessStartInfo(executablePath)
         {
             UseShellExecute = false,
@@ -101,6 +106,64 @@ public sealed class TaikeronLabService
         startInfo.Environment["TAIKERON_MAPS_ROOT"] = _settingsService.Current.MapsRoot;
 
         Process.Start(startInfo);
+    }
+
+    private void EnsureConfiguredDataAvailable(string executablePath)
+    {
+        var dataRoot = Path.GetFullPath(_settingsService.Current.DataVaultRoot)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        if (string.IsNullOrWhiteSpace(dataRoot))
+            throw new InvalidOperationException("Le Data Vault n’est pas configuré.");
+
+        var installDirectory = Path.GetDirectoryName(Path.GetFullPath(executablePath))!;
+        if (string.Equals(dataRoot, installDirectory, StringComparison.OrdinalIgnoreCase)
+            || IsPathInside(dataRoot, installDirectory))
+        {
+            throw new InvalidOperationException("Le Data Vault doit être séparé du dossier d’installation de Taikeron Lab.");
+        }
+
+        Directory.CreateDirectory(dataRoot);
+
+        foreach (var name in new[] { "data", "vault" })
+        {
+            var destination = Path.Combine(dataRoot, name);
+            if (Directory.Exists(destination) && Directory.EnumerateFileSystemEntries(destination).Any())
+                continue;
+
+            var source = Path.Combine(installDirectory, name);
+            if (!Directory.Exists(source))
+                continue;
+
+            if (Directory.Exists(destination))
+                Directory.Delete(destination, true);
+
+            CopyDirectory(source, destination);
+        }
+    }
+
+    private static void CopyDirectory(string source, string destination)
+    {
+        Directory.CreateDirectory(destination);
+
+        foreach (var directory in Directory.EnumerateDirectories(source, "*", SearchOption.AllDirectories))
+            Directory.CreateDirectory(Path.Combine(destination, Path.GetRelativePath(source, directory)));
+
+        foreach (var file in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories))
+        {
+            var target = Path.Combine(destination, Path.GetRelativePath(source, file));
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            File.Copy(file, target, overwrite: true);
+        }
+    }
+
+    private static bool IsPathInside(string candidate, string parent)
+    {
+        var fullCandidate = Path.GetFullPath(candidate);
+        var fullParent = Path.GetFullPath(parent)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            + Path.DirectorySeparatorChar;
+
+        return fullCandidate.StartsWith(fullParent, StringComparison.OrdinalIgnoreCase);
     }
 
     public async Task<string> DownloadAndVerifyAsync(
