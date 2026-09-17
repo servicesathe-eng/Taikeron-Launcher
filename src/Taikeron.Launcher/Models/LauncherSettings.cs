@@ -8,6 +8,8 @@ public sealed class LauncherSettings
     public string DownloadsRoot { get; set; } = string.Empty;
     public string BackupRoot { get; set; } = string.Empty;
 
+    public bool InitialSetupCompleted { get; set; }
+
     public bool AutomaticBackupEnabled { get; set; }
     public int BackupIntervalHours { get; set; } = 24;
     public int BackupRetentionCount { get; set; } = 7;
@@ -30,6 +32,7 @@ public sealed class LauncherSettings
             MapsRoot = Path.Combine(vault, "Maps"),
             DownloadsRoot = Path.Combine(taikeron, "Launcher", "Downloads"),
             BackupRoot = string.Empty,
+            InitialSetupCompleted = false,
             AutomaticBackupEnabled = false,
             BackupIntervalHours = 24,
             BackupRetentionCount = 7,
