@@ -11,23 +11,32 @@ public sealed class TlIntegrityService
     public const string StableIntegrityManifestUrl =
         "https://taikeron-cyclingos.github.io/releases/tl/integrity-stable.json";
 
+    private const string VersionedIntegrityBaseUrl =
+        "https://taikeron-cyclingos.github.io/releases/tl/integrity";
+
     private readonly HttpClient _httpClient = new()
     {
         Timeout = TimeSpan.FromSeconds(30)
     };
 
-    public async Task<TlIntegrityManifest?> GetStableManifestAsync(CancellationToken cancellationToken = default)
+    public async Task<TlIntegrityManifest?> GetManifestForInstalledVersionAsync(
+        string? installedVersion,
+        TlReleaseManifest? officialRelease,
+        CancellationToken cancellationToken = default)
     {
-        using var response = await _httpClient.GetAsync(StableIntegrityManifestUrl, cancellationToken);
-        if (response.StatusCode == HttpStatusCode.NotFound)
+        var normalized = NormalizeVersion(installedVersion);
+        if (string.IsNullOrWhiteSpace(normalized))
             return null;
 
-        response.EnsureSuccessStatusCode();
-        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-        return await JsonSerializer.DeserializeAsync<TlIntegrityManifest>(stream, new JsonSerializerOptions
-        {
-            PropertyNameCaseInsensitive = true
-        }, cancellationToken);
+        var versionedUrl = $"{VersionedIntegrityBaseUrl}/{Uri.EscapeDataString(normalized)}/windows-x64.json";
+        var versioned = await GetManifestAsync(versionedUrl, cancellationToken);
+        if (versioned is not null)
+            return versioned;
+
+        if (string.Equals(normalized, NormalizeVersion(officialRelease?.Version), StringComparison.OrdinalIgnoreCase))
+            return await GetManifestAsync(StableIntegrityManifestUrl, cancellationToken);
+
+        return null;
     }
 
     public async Task<TlIntegrityCheckResult> VerifyAsync(
@@ -47,7 +56,7 @@ public sealed class TlIntegrityService
         if (integrityManifest is null)
             return Result(
                 TlIntegrityState.ReferenceUnavailable,
-                "Cette release ne possède pas encore de manifeste d’intégrité public. Version contrôlée, fichiers non certifiés.");
+                "Cette version ne possède pas encore de manifeste d’intégrité public. La version est connue, mais les fichiers ne peuvent pas encore être certifiés.");
 
         ValidateManifest(integrityManifest);
 
@@ -55,28 +64,21 @@ public sealed class TlIntegrityService
         var referenceVersion = NormalizeVersion(integrityManifest.Version);
         var localVersion = NormalizeVersion(installedVersion);
 
-        if (!string.IsNullOrWhiteSpace(officialVersion) &&
-            !string.Equals(referenceVersion, officialVersion, StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(localVersion, referenceVersion, StringComparison.OrdinalIgnoreCase))
         {
             return Result(
-                TlIntegrityState.ReferenceUnavailable,
-                $"Référence d’intégrité {integrityManifest.Version} différente de la release officielle {officialRelease!.Version}.");
+                TlIntegrityState.VersionMismatch,
+                $"Le manifeste récupéré concerne {integrityManifest.Version}, mais TL local déclare {installedVersion ?? "une version inconnue"}.");
         }
 
         if (officialRelease is not null &&
+            string.Equals(officialVersion, referenceVersion, StringComparison.OrdinalIgnoreCase) &&
             !string.IsNullOrWhiteSpace(integrityManifest.PackageSha256) &&
             !string.Equals(NormalizeSha(integrityManifest.PackageSha256), NormalizeSha(officialRelease.Sha256), StringComparison.OrdinalIgnoreCase))
         {
             return Result(
                 TlIntegrityState.ReferenceUnavailable,
                 "Le manifeste d’intégrité ne correspond pas au paquet officiel publié. Vérification refusée.");
-        }
-
-        if (!string.Equals(localVersion, referenceVersion, StringComparison.OrdinalIgnoreCase))
-        {
-            return Result(
-                TlIntegrityState.VersionMismatch,
-                $"Version locale {installedVersion ?? "inconnue"}, version officielle {integrityManifest.Version}.");
         }
 
         var problems = new List<string>();
@@ -144,6 +146,20 @@ public sealed class TlIntegrityService
             0,
             0,
             []);
+    }
+
+    private async Task<TlIntegrityManifest?> GetManifestAsync(string url, CancellationToken cancellationToken)
+    {
+        using var response = await _httpClient.GetAsync(url, cancellationToken);
+        if (response.StatusCode == HttpStatusCode.NotFound)
+            return null;
+
+        response.EnsureSuccessStatusCode();
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        return await JsonSerializer.DeserializeAsync<TlIntegrityManifest>(stream, new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        }, cancellationToken);
     }
 
     private static void ValidateManifest(TlIntegrityManifest manifest)
