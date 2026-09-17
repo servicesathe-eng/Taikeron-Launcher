@@ -8,6 +8,35 @@ L’objectif est d’éviter qu’une mise à jour ajoute du nouveau code au-des
 
 Les données utilisateur appartiennent au **Data Vault**. Elles doivent rester indépendantes du code, de la version de TL et du disque choisi pour les applications.
 
+## Le Launcher comme source de vérité
+
+Le Launcher ne fait pas confiance au seul numéro de version déclaré par Taikeron Lab.
+
+À chaque démarrage du Launcher :
+
+1. lire le manifeste de release officiel ;
+2. détecter la version TL réellement installée ;
+3. récupérer le manifeste d’intégrité correspondant à cette version ;
+4. vérifier localement la taille et le SHA-256 de chaque fichier de code attendu ;
+5. détecter les résidus connus d’anciennes activations ;
+6. afficher séparément l’état d’intégrité et l’état de mise à jour ;
+7. bloquer le lancement si le code est connu comme altéré.
+
+Une version ancienne peut donc être **intacte mais pas à jour**. Ce sont deux états différents.
+
+Le Data Vault, les cartes utilisateur et les sauvegardes ne font jamais partie de cette comparaison de code. Aucun contenu personnel n’est envoyé au site : seuls les petits manifestes publics sont téléchargés et les hash sont calculés localement.
+
+Les manifestes publics sont publiés sous deux formes :
+
+```text
+releases/tl/integrity-stable.json
+releases/tl/integrity/<version>/windows-x64.json
+```
+
+Chaque entrée contient au minimum le chemin relatif, la taille et le SHA-256 du fichier construit. WDS génère ces valeurs directement depuis `dist/win-unpacked` de la release réellement publiée.
+
+Les anciennes releases publiées avant ce mécanisme peuvent être affichées comme `non certifiées` tant qu’un manifeste historique fiable n’existe pas. Le Launcher ne doit jamais inventer une certification.
+
 ## Distribution publique
 
 Pour Windows, le site public Taikeron doit distribuer **Taikeron Launcher**, pas Taikeron Lab directement.
@@ -98,24 +127,28 @@ Pour chaque snapshot :
 
 Un disque externe absent n’est pas une panne du launcher. L’état devient `Sauvegarde en attente — disque absent` et une nouvelle vérification est faite ultérieurement.
 
-Dans la v0.2.0, les vérifications automatiques ont lieu au démarrage du launcher et périodiquement tant qu’il reste ouvert. Un worker autonome permettra ensuite les sauvegardes planifiées même lorsque l’interface du launcher est fermée.
+Dans la v0.4.0, les vérifications automatiques ont lieu au démarrage du launcher et périodiquement tant qu’il reste ouvert. Un worker autonome pourra ensuite assurer les sauvegardes planifiées même lorsque l’interface du launcher est fermée.
 
-## Mise à jour TL cible
+## Remplacement propre de TL
+
+Le Launcher utilise un worker externe indépendant de TL.
 
 1. Lire le manifeste stable.
 2. Télécharger le paquet dans le dossier de téléchargements configuré.
 3. Vérifier la taille attendue.
-4. Vérifier le SHA-256.
-5. Préparer une requête d’installation pour le worker externe.
-6. Fermer TL.
-7. Vérifier qu’aucun processus TL n’utilise encore le dossier code.
-8. Supprimer entièrement le dossier `Lab` sous la racine Applications configurée.
-9. Vérifier que l’ancien code n’existe plus.
-10. Recréer `Lab` à partir du nouveau paquet.
-11. Vérifier la version et l’intégrité du nouveau runtime.
-12. Relancer TL uniquement si l’installation est cohérente.
+4. Vérifier le SHA-256 du paquet.
+5. Copier le paquet dans le staging du worker et revérifier son SHA-256.
+6. Fermer complètement TL.
+7. Protéger les cartes locales encore présentes dans le dossier historique.
+8. Supprimer entièrement le dossier de code TL.
+9. Vérifier que l’ancien dossier a réellement disparu.
+10. Lancer l’installateur officiel avec le dossier cible explicite.
+11. Vérifier `Taikeron Lab.exe`, `resources/app.asar` et la version installée.
+12. Restaurer les cartes protégées.
+13. Relancer le contrôle d’intégrité du Launcher.
+14. Ne lancer TL que si aucune corruption connue n’est détectée.
 
-Le worker est séparé du runtime TL afin de pouvoir remplacer TL alors que TL est arrêté.
+Si l’ancien code ne peut pas être supprimé, l’installation s’arrête. Une mise à jour ne doit jamais fusionner deux runtimes.
 
 ## Invariants publics
 
@@ -124,34 +157,37 @@ Le worker est séparé du runtime TL afin de pouvoir remplacer TL alors que TL e
 - Aucun raccourci public ne doit viser une copie historique de TL.
 - Une mise à jour ne fusionne jamais deux runtimes.
 - Les anciens fichiers applicatifs doivent être réellement supprimés avant installation du nouveau code.
+- Le Launcher distingue `intact`, `non certifié`, `altéré` et `mise à jour disponible`.
+- Un TL dont l’intégrité est connue comme invalide n’est pas lancé par le Launcher.
 - Les données utilisateur sont physiquement séparées du code.
 - Le Data Vault ne doit jamais être supprimé par une mise à jour d’application.
+- Le Data Vault n’est jamais envoyé au serveur pour vérifier TL.
 - Un paquet dont la taille ou le SHA-256 ne correspond pas au manifeste n’est jamais installé.
 - Une sauvegarde du Vault ne doit jamais être stockée à l’intérieur du Vault lui-même.
 - Un support de sauvegarde amovible peut être absent sans empêcher le launcher ou TL de fonctionner.
 - En cas d’échec, le launcher reste fonctionnel et propose réparation/réinstallation.
 - Un éventuel paquet précédent peut être conservé comme archive de récupération, mais pas comme deuxième installation lançable.
 
-## État v0.2.0
+## État v0.4.0
 
-La v0.2.0 met en place :
+La v0.4.0 met en place :
 
 - UI WPF du launcher ;
 - détection de Taikeron Lab ;
-- lecture de la version locale ;
-- lecture du manifeste stable public TL ;
-- comparaison des versions ;
-- téléchargement du paquet ;
-- contrôle de taille ;
-- contrôle SHA-256 ;
-- lancement de TL détecté ;
-- configuration persistante des racines Applications / Data Vault / Maps / Téléchargements ;
-- destination de sauvegarde configurable ;
+- lecture correcte du manifeste public `platforms/windows-x64` ;
+- normalisation correcte des versions TL `2.302.x-y` ↔ `2.302.x.y` ;
+- téléchargement et vérification du paquet officiel ;
+- worker externe de remplacement propre ;
+- suppression stricte de l’ancien dossier code avant réinstallation ;
+- contrôle post-installation de l’EXE et de `app.asar` ;
+- manifests d’intégrité WDS générés automatiquement fichier par fichier ;
+- manifests d’intégrité archivés par version ;
+- vérification d’intégrité à chaque démarrage du Launcher ;
+- blocage du lancement si une corruption connue est détectée ;
+- configuration persistante Applications / Data Vault / Maps / Téléchargements ;
 - sauvegardes manuelles et automatiques du Data Vault ;
-- snapshots versionnés ;
-- rétention configurable ;
-- manifeste d’intégrité et vérification SHA-256 fichier par fichier ;
-- gestion d’un disque de sauvegarde absent ;
+- snapshots versionnés et SHA-256 de sauvegarde ;
+- gestion d’un disque externe absent ;
 - règle de distribution publique Launcher-first.
 
-La suppression/reconstruction atomique du dossier TL sera assurée par le worker externe lors de l’étape suivante. Le déplacement vérifié d’un Data Vault existant et les sauvegardes autonomes lorsque le launcher est fermé sont également des étapes séparées.
+La prochaine couche de durcissement sera la signature cryptographique du manifeste d’intégrité avec une clé publique embarquée dans le Launcher. Les anciennes releases sans manifeste fiable restent explicitement `non certifiées` plutôt que faussement déclarées saines.
