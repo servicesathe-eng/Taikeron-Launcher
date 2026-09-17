@@ -253,6 +253,22 @@ public partial class MainWindow : Window
     {
         try
         {
+            if (!_settingsService.Current.InitialSetupCompleted)
+            {
+                var setup = new FirstInstallWindow(_settingsService)
+                {
+                    Owner = this
+                };
+
+                if (setup.ShowDialog() != true)
+                {
+                    ActivityText.Text = "Configuration du stockage annulée avant lancement.";
+                    return;
+                }
+
+                _settingsService.EnsureConfiguredDirectories();
+            }
+
             if (_installedExecutable is null)
             {
                 MessageBox.Show("Taikeron Lab n’est pas installé ou n’a pas été détecté.", "Taikeron Launcher", MessageBoxButton.OK, MessageBoxImage.Information);
