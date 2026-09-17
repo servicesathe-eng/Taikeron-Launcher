@@ -55,14 +55,9 @@
                     <Button Grid.Column="2" Content="Parcourir" Style="{StaticResource ActionButton}" Padding="14,8" Click="BrowseVault_Click"/>
                 </Grid>
 
-                <TextBlock Text="3 · Cartes" FontSize="16" FontWeight="SemiBold"/>
-                <TextBlock Text="Les TaikerMap peuvent être stockées sur un autre disque si elles occupent beaucoup d’espace."
-                           Foreground="{StaticResource Muted}" FontSize="12" Margin="0,4,0,7" TextWrapping="Wrap"/>
-                <Grid>
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="8"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                    <TextBox x:Name="MapsRootBox" Style="{StaticResource PathBox}"/>
-                    <Button Grid.Column="2" Content="Parcourir" Style="{StaticResource ActionButton}" Padding="14,8" Click="BrowseMaps_Click"/>
-                </Grid>
+                <TextBlock Text="Cartes" FontSize="13" FontWeight="SemiBold"/>
+                <TextBlock Text="Par défaut, les cartes seront rangées dans le dossier Maps à l’intérieur de l’emplacement de données. Tu pourras changer ce chemin plus tard."
+                           Foreground="{StaticResource Muted}" FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap"/>
 
                 <Border Background="#081924" BorderBrush="#304858" BorderThickness="1" CornerRadius="7" Padding="12" Margin="0,16,0,0">
                     <TextBlock Text="Le Launcher ne supprimera jamais le dossier de données lors d’une mise à jour ou d’une réparation de TL."
