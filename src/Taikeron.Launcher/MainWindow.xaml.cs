@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Media;
+using System.Windows.Threading;
 using Taikeron.Launcher.Models;
 using Taikeron.Launcher.Services;
 
@@ -7,15 +8,31 @@ namespace Taikeron.Launcher;
 
 public partial class MainWindow : Window
 {
-    private readonly TaikeronLabService _labService = new();
+    private readonly LauncherSettingsService _settingsService = new();
+    private readonly VaultBackupService _backupService = new();
+    private readonly TaikeronLabService _labService;
+    private readonly DispatcherTimer _backupTimer;
+
     private TlReleaseManifest? _stableRelease;
     private string? _installedExecutable;
     private string? _installedVersion;
+    private bool _backupInProgress;
 
     public MainWindow()
     {
+        _labService = new TaikeronLabService(_settingsService);
+        _backupTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(10) };
+        _backupTimer.Tick += async (_, _) => await CheckAutomaticBackupAsync();
+
         InitializeComponent();
-        Loaded += async (_, _) => await RefreshAsync();
+        Loaded += async (_, _) =>
+        {
+            _settingsService.EnsureConfiguredDirectories();
+            await RefreshAsync();
+            await CheckAutomaticBackupAsync();
+            _backupTimer.Start();
+        };
+        Closed += (_, _) => _backupTimer.Stop();
     }
 
     private async Task RefreshAsync()
@@ -56,7 +73,7 @@ public partial class MainWindow : Window
                 StatusDot.Fill = Brushes.DarkOrange;
                 StatusText.Foreground = Brushes.DarkOrange;
                 StatusText.Text = "Non installé";
-                ActivityText.Text = "TL pourra être installé dans le dossier canonique géré par le launcher.";
+                ActivityText.Text = $"TL pourra être installé dans {_labService.CanonicalInstallDirectory}.";
             }
             else if (updateAvailable)
             {
@@ -159,20 +176,70 @@ public partial class MainWindow : Window
     {
         await RefreshAsync();
 
+        var settings = _settingsService.Current;
         var message = _installedExecutable is null
-            ? "TL n’est pas détecté. La réparation complète sera activée avec le worker d’installation atomique."
-            : $"Installation détectée :\n{_installedExecutable}\n\nVersion : {_installedVersion ?? "inconnue"}\n\nAucun fichier utilisateur n’a été modifié.";
+            ? $"TL n’est pas détecté.\n\nDossier code prévu :\n{_labService.CanonicalInstallDirectory}\n\nData Vault :\n{settings.DataVaultRoot}\n\nLa réparation complète sera activée avec le worker d’installation atomique."
+            : $"Installation détectée :\n{_installedExecutable}\n\nVersion : {_installedVersion ?? "inconnue"}\n\nData Vault :\n{settings.DataVaultRoot}\n\nAucun fichier utilisateur n’a été modifié.";
 
         MessageBox.Show(message, "Diagnostic TL", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
-    private void SettingsButton_Click(object sender, RoutedEventArgs e)
+    private async void SettingsButton_Click(object sender, RoutedEventArgs e)
     {
-        MessageBox.Show(
-            $"Canal : stable\n\nDossier code canonique TL :\n{_labService.CanonicalInstallDirectory}\n\nLes données utilisateur resteront séparées du dossier code.",
-            "Paramètres du launcher",
-            MessageBoxButton.OK,
-            MessageBoxImage.Information);
+        var window = new StorageSettingsWindow(_settingsService, _backupService)
+        {
+            Owner = this
+        };
+
+        if (window.ShowDialog() == true)
+        {
+            _settingsService.EnsureConfiguredDirectories();
+            await RefreshAsync();
+            await CheckAutomaticBackupAsync();
+        }
+    }
+
+    private async Task CheckAutomaticBackupAsync()
+    {
+        if (_backupInProgress)
+            return;
+
+        var settings = _settingsService.Current;
+        if (!_backupService.IsBackupDue(settings))
+            return;
+
+        var state = _backupService.GetTargetState(settings);
+        if (!state.Available)
+        {
+            settings.LastBackupAttemptUtc = DateTimeOffset.UtcNow;
+            settings.LastBackupStatus = $"Sauvegarde en attente — {state.Message}";
+            _settingsService.Save(settings);
+            ActivityText.Text = settings.LastBackupStatus;
+            return;
+        }
+
+        _backupInProgress = true;
+        ActivityText.Text = "Sauvegarde automatique du Data Vault en cours…";
+
+        try
+        {
+            var result = await Task.Run(() => _backupService.BackupAsync(settings)).Unwrap();
+            settings.LastBackupStatus = result.Message;
+            _settingsService.Save(settings);
+            ActivityText.Text = result.Success
+                ? $"Data Vault sauvegardé : {result.SnapshotPath}"
+                : result.Message;
+        }
+        catch (Exception ex)
+        {
+            settings.LastBackupStatus = $"Sauvegarde automatique échouée — {ex.Message}";
+            _settingsService.Save(settings);
+            ActivityText.Text = settings.LastBackupStatus;
+        }
+        finally
+        {
+            _backupInProgress = false;
+        }
     }
 
     private void SetBusy(bool busy, string? text = null)
