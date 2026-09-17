@@ -17,7 +17,6 @@ public partial class FirstInstallWindow : Window
         var settings = settingsService.Current;
         AppsRootBox.Text = settings.AppsRoot;
         VaultRootBox.Text = settings.DataVaultRoot;
-        MapsRootBox.Text = settings.MapsRoot;
     }
 
     private void BrowseApps_Click(object sender, RoutedEventArgs e) =>
@@ -25,9 +24,6 @@ public partial class FirstInstallWindow : Window
 
     private void BrowseVault_Click(object sender, RoutedEventArgs e) =>
         BrowseInto(VaultRootBox, "Dossier des données personnelles Taikeron");
-
-    private void BrowseMaps_Click(object sender, RoutedEventArgs e) =>
-        BrowseInto(MapsRootBox, "Dossier des cartes Taikeron");
 
     private static void BrowseInto(System.Windows.Controls.TextBox textBox, string title)
     {
@@ -47,27 +43,20 @@ public partial class FirstInstallWindow : Window
         {
             var apps = LauncherSettingsService.NormalizePath(AppsRootBox.Text);
             var vault = LauncherSettingsService.NormalizePath(VaultRootBox.Text);
-            var maps = LauncherSettingsService.NormalizePath(MapsRootBox.Text);
-
             if (string.IsNullOrWhiteSpace(apps)
-                || string.IsNullOrWhiteSpace(vault)
-                || string.IsNullOrWhiteSpace(maps))
+                || string.IsNullOrWhiteSpace(vault))
             {
                 throw new InvalidOperationException(
-                    "Les emplacements Applications, Données personnelles et Cartes sont obligatoires.");
+                    "Les emplacements Applications et Données personnelles sont obligatoires.");
             }
+
+            var maps = Path.Combine(vault, "Maps");
 
             var tlCodeDirectory = Path.Combine(apps, "Lab");
             if (PathsOverlap(vault, tlCodeDirectory))
             {
                 throw new InvalidOperationException(
                     "Le dossier des données personnelles doit être séparé du dossier code de Taikeron Lab.");
-            }
-
-            if (PathsOverlap(maps, tlCodeDirectory))
-            {
-                throw new InvalidOperationException(
-                    "Le dossier des cartes doit être séparé du dossier code de Taikeron Lab.");
             }
 
             var current = _settingsService.Current;
