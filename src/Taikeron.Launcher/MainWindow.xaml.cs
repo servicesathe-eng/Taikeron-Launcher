@@ -223,7 +223,7 @@ public partial class MainWindow : Window
 
         try
         {
-            var result = await Task.Run(() => _backupService.BackupAsync(settings)).Unwrap();
+            var result = await Task.Run(async () => await _backupService.BackupAsync(settings));
             settings.LastBackupStatus = result.Message;
             _settingsService.Save(settings);
             ActivityText.Text = result.Success
