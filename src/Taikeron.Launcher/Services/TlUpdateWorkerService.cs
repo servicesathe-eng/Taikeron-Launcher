@@ -67,6 +67,8 @@ public sealed class TlUpdateWorkerService
             executablePath,
             currentVersion = currentVersion ?? string.Empty,
             targetVersion = release.Version,
+            dataVaultRoot = Path.GetFullPath(_settingsService.Current.DataVaultRoot),
+            mapsRoot = Path.GetFullPath(_settingsService.Current.MapsRoot),
             jobDirectory,
             statusFile,
             resultFile
