@@ -121,8 +121,10 @@ jobs:
           $zip = 'artifacts/Taikeron-Launcher-win-x64.zip'
           $sha = 'artifacts/Taikeron-Launcher-win-x64.sha256.txt'
 
-          gh release view $tag --repo $repo *> $null
-          if ($LASTEXITCODE -eq 0) {
+          cmd /c "gh release view $tag --repo $repo >nul 2>nul"
+          $releaseExists = ($LASTEXITCODE -eq 0)
+
+          if ($releaseExists) {
             gh release upload $tag $zip $sha --repo $repo --clobber
           } else {
             gh release create $tag $zip $sha --repo $repo --title $title --notes "Taikeron Launcher $env:RELEASE_VERSION · Windows x64" --latest
