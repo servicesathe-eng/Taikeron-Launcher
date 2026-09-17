@@ -1,50 +1,109 @@
-name: Build Taikeron Launcher
+name: Build and publish Taikeron Launcher
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - '.github/workflows/build-windows.yml'
   pull_request:
     branches: [main]
 
+permissions:
+  contents: write
+
 jobs:
   build:
-    runs-on: [self-hosted, Windows, X64]
+    runs-on: windows-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup .NET 8
+      - name: Setup .NET 10
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 8.0.x
+          dotnet-version: 10.0.x
 
-      - name: Restore launcher
-        run: dotnet restore src/Taikeron.Launcher/Taikeron.Launcher.csproj
-
-      - name: Restore update worker
-        run: dotnet restore src/Taikeron.UpdateWorker/Taikeron.UpdateWorker.csproj
-
-      - name: Build launcher
-        run: dotnet build src/Taikeron.Launcher/Taikeron.Launcher.csproj -c Release --no-restore
-
-      - name: Build update worker
-        run: dotnet build src/Taikeron.UpdateWorker/Taikeron.UpdateWorker.csproj -c Release --no-restore
-
-      - name: Publish launcher
-        run: dotnet publish src/Taikeron.Launcher/Taikeron.Launcher.csproj -c Release -r win-x64 --self-contained false -o artifacts/TaikeronLauncher
-
-      - name: Publish update worker beside launcher
-        run: dotnet publish src/Taikeron.UpdateWorker/Taikeron.UpdateWorker.csproj -c Release -r win-x64 --self-contained false -o artifacts/TaikeronLauncher
-
-      - name: Verify worker is packaged
+      - name: Read launcher version
+        id: version
         shell: powershell
         run: |
-          if (-not (Test-Path "artifacts/TaikeronLauncher/TaikeronUpdateWorker.exe")) {
-            throw "TaikeronUpdateWorker.exe absent du package launcher"
+          [xml]$project = Get-Content 'src/Taikeron.Launcher/Taikeron.Launcher.csproj'
+          $version = [string]$project.Project.PropertyGroup.Version
+          if ([string]::IsNullOrWhiteSpace($version)) { throw 'Version Launcher absente du csproj' }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "tag=launcher-v$version" >> $env:GITHUB_OUTPUT
+
+      - name: Restore launcher
+        run: dotnet restore src/Taikeron.Launcher/Taikeron.Launcher.csproj -r win-x64
+
+      - name: Restore update worker
+        run: dotnet restore src/Taikeron.UpdateWorker/Taikeron.UpdateWorker.csproj -r win-x64
+
+      - name: Build launcher
+        run: dotnet build src/Taikeron.Launcher/Taikeron.Launcher.csproj -c Release -r win-x64 --no-restore
+
+      - name: Build update worker
+        run: dotnet build src/Taikeron.UpdateWorker/Taikeron.UpdateWorker.csproj -c Release -r win-x64 --no-restore
+
+      - name: Publish launcher self-contained
+        run: dotnet publish src/Taikeron.Launcher/Taikeron.Launcher.csproj -c Release -r win-x64 --self-contained true --no-restore -o artifacts/TaikeronLauncher
+
+      - name: Publish update worker beside launcher
+        run: dotnet publish src/Taikeron.UpdateWorker/Taikeron.UpdateWorker.csproj -c Release -r win-x64 --self-contained true --no-restore -o artifacts/TaikeronLauncher
+
+      - name: Verify package
+        shell: powershell
+        run: |
+          $required = @(
+            'artifacts/TaikeronLauncher/TaikeronLauncher.exe',
+            'artifacts/TaikeronLauncher/TaikeronUpdateWorker.exe'
+          )
+          foreach ($file in $required) {
+            if (-not (Test-Path -LiteralPath $file -PathType Leaf)) {
+              throw "Fichier Launcher absent du package : $file"
+            }
           }
 
-      - name: Upload launcher artifact
+      - name: Create public release package
+        shell: powershell
+        run: |
+          $zip = 'artifacts/Taikeron-Launcher-win-x64.zip'
+          if (Test-Path $zip) { Remove-Item $zip -Force }
+          Compress-Archive -Path 'artifacts/TaikeronLauncher/*' -DestinationPath $zip -CompressionLevel Optimal
+          $sha = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$sha  Taikeron-Launcher-win-x64.zip" | Set-Content -Encoding ascii 'artifacts/Taikeron-Launcher-win-x64.sha256.txt'
+          Write-Host "Launcher SHA-256: $sha"
+
+      - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
           name: Taikeron-Launcher-win-x64
-          path: artifacts/TaikeronLauncher
+          path: |
+            artifacts/Taikeron-Launcher-win-x64.zip
+            artifacts/Taikeron-Launcher-win-x64.sha256.txt
           if-no-files-found: error
+
+      - name: Publish GitHub release
+        if: github.event_name != 'pull_request'
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          $repo = $env:GITHUB_REPOSITORY
+          $tag = $env:RELEASE_TAG
+          $title = "Taikeron Launcher $env:RELEASE_VERSION"
+          $zip = 'artifacts/Taikeron-Launcher-win-x64.zip'
+          $sha = 'artifacts/Taikeron-Launcher-win-x64.sha256.txt'
+
+          gh release view $tag --repo $repo *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag $zip $sha --repo $repo --clobber
+          } else {
+            gh release create $tag $zip $sha --repo $repo --title $title --notes "Taikeron Launcher $env:RELEASE_VERSION · Windows x64" --latest
+          }
+
+          if ($LASTEXITCODE -ne 0) { throw 'Publication de la release Launcher échouée' }
