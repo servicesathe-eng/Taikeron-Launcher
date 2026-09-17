@@ -29,7 +29,7 @@ public sealed class LauncherSettings
         {
             AppsRoot = Path.Combine(taikeron, "Apps"),
             DataVaultRoot = vault,
-            MapsRoot = Path.Combine(vault, "Maps"),
+            MapsRoot = Path.Combine(taikeron, "Maps"),
             DownloadsRoot = Path.Combine(taikeron, "Launcher", "Downloads"),
             BackupRoot = string.Empty,
             InitialSetupCompleted = false,
