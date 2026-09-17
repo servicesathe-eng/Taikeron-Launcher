@@ -17,14 +17,30 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
-      - name: Restore
+      - name: Restore launcher
         run: dotnet restore src/Taikeron.Launcher/Taikeron.Launcher.csproj
 
-      - name: Build
+      - name: Restore update worker
+        run: dotnet restore src/Taikeron.UpdateWorker/Taikeron.UpdateWorker.csproj
+
+      - name: Build launcher
         run: dotnet build src/Taikeron.Launcher/Taikeron.Launcher.csproj -c Release --no-restore
 
-      - name: Publish portable Windows build
+      - name: Build update worker
+        run: dotnet build src/Taikeron.UpdateWorker/Taikeron.UpdateWorker.csproj -c Release --no-restore
+
+      - name: Publish launcher
         run: dotnet publish src/Taikeron.Launcher/Taikeron.Launcher.csproj -c Release -r win-x64 --self-contained false -o artifacts/TaikeronLauncher
+
+      - name: Publish update worker beside launcher
+        run: dotnet publish src/Taikeron.UpdateWorker/Taikeron.UpdateWorker.csproj -c Release -r win-x64 --self-contained false -o artifacts/TaikeronLauncher
+
+      - name: Verify worker is packaged
+        shell: powershell
+        run: |
+          if (-not (Test-Path "artifacts/TaikeronLauncher/TaikeronUpdateWorker.exe")) {
+            throw "TaikeronUpdateWorker.exe absent du package launcher"
+          }
 
       - name: Upload launcher artifact
         uses: actions/upload-artifact@v4
