@@ -152,7 +152,7 @@ public partial class MainWindow : Window
             UpdateBadge.Visibility = Visibility.Visible;
             UpdateBadgeText.Text = "Réparation requise";
             LaunchButton.IsEnabled = false;
-            UpdateButton.Content = "↻  Réparer TL";
+            UpdateButton.Content = "↻  Supprimer + réinstaller TL";
             ShaStatusText.Text = "Intégrité : ÉCHEC";
             var detail = _integrityResult.Problems.FirstOrDefault();
             ActivityText.Text = string.IsNullOrWhiteSpace(detail)
@@ -167,7 +167,7 @@ public partial class MainWindow : Window
             StatusText.Foreground = (Brush)FindResource("Green");
             StatusText.Text = updateAvailable ? "Installé · intact" : "Installé · intact · à jour";
             LaunchButton.IsEnabled = true;
-            UpdateButton.Content = updateAvailable ? "↓  Mettre à jour" : "↻  Réinstaller proprement";
+            UpdateButton.Content = updateAvailable ? "↻  Réinstaller la dernière version" : "↻  Réinstaller proprement";
             ShaStatusText.Text = $"Intégrité vérifiée · {_integrityResult.CheckedFiles} SHA-256";
             ActivityText.Text = updateAvailable
                 ? $"{_integrityResult.Message} Une version plus récente est disponible."
@@ -179,7 +179,7 @@ public partial class MainWindow : Window
         StatusText.Foreground = Brushes.DarkOrange;
         StatusText.Text = updateAvailable ? "Installé · non certifié" : "Installé · référence incomplète";
         LaunchButton.IsEnabled = true;
-        UpdateButton.Content = updateAvailable ? "↓  Mettre à jour" : "↻  Réinstaller proprement";
+        UpdateButton.Content = updateAvailable ? "↻  Réinstaller la dernière version" : "↻  Réinstaller proprement";
         ShaStatusText.Text = "Intégrité : référence indisponible";
         ActivityText.Text = _integrityResult?.Message ?? "Impossible de certifier les fichiers locaux.";
     }
@@ -235,7 +235,7 @@ public partial class MainWindow : Window
 
             var packagePath = await _labService.DownloadAndVerifyAsync(_stableRelease, downloadProgress);
             DownloadProgress.Value = 100;
-            ActivityText.Text = "Paquet vérifié. Le launcher prend maintenant le contrôle de l’installation…";
+            ActivityText.Text = "Paquet vérifié. Suppression complète de l’ancienne installation avant réinstallation…";
 
             var workerProgress = new Progress<TlWorkerStatus>(status =>
             {
