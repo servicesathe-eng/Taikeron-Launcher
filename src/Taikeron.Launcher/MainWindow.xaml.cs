@@ -11,11 +11,13 @@ public partial class MainWindow : Window
     private readonly LauncherSettingsService _settingsService = new();
     private readonly VaultBackupService _backupService = new();
     private readonly TlIntegrityService _integrityService = new();
+    private readonly LauncherSelfUpdateService _launcherSelfUpdateService = new();
     private readonly TaikeronLabService _labService;
     private readonly TlUpdateWorkerService _updateWorkerService;
     private readonly DispatcherTimer _backupTimer;
 
     private TlReleaseManifest? _stableRelease;
+    private LauncherReleaseInfo? _launcherRelease;
     private TlIntegrityCheckResult? _integrityResult;
     private string? _installedExecutable;
     private string? _installedVersion;
@@ -31,12 +33,75 @@ public partial class MainWindow : Window
         InitializeComponent();
         Loaded += async (_, _) =>
         {
+            LauncherVersionText.Text = $"v{_launcherSelfUpdateService.CurrentVersion}";
+            await CheckLauncherSelfUpdateAsync();
             _settingsService.EnsureConfiguredDirectories();
             await RefreshAsync();
             await CheckAutomaticBackupAsync();
             _backupTimer.Start();
         };
         Closed += (_, _) => _backupTimer.Stop();
+    }
+
+
+    private async Task CheckLauncherSelfUpdateAsync()
+    {
+        LauncherSelfUpdateButton.Visibility = Visibility.Collapsed;
+
+        try
+        {
+            _launcherRelease = await _launcherSelfUpdateService.GetLatestReleaseAsync();
+            if (_launcherSelfUpdateService.IsUpdateAvailable(_launcherRelease))
+            {
+                LauncherSelfUpdateButton.Content = $"↑  Launcher {_launcherRelease!.Version}";
+                LauncherSelfUpdateButton.Visibility = Visibility.Visible;
+            }
+        }
+        catch
+        {
+            // Une panne réseau du canal Launcher ne doit pas empêcher TL de fonctionner.
+            _launcherRelease = null;
+            LauncherSelfUpdateButton.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    private async void LauncherSelfUpdateButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_launcherRelease is null || !_launcherSelfUpdateService.IsUpdateAvailable(_launcherRelease))
+            return;
+
+        var answer = MessageBox.Show(
+            $"Taikeron Launcher {_launcherRelease.Version} est disponible.\n\n" +
+            "Le Launcher va télécharger la release officielle, vérifier son SHA-256, se fermer, remplacer son ancien code puis redémarrer.",
+            "Mettre à jour Taikeron Launcher",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Information);
+
+        if (answer != MessageBoxResult.Yes)
+            return;
+
+        try
+        {
+            SetBusy(true, $"Préparation du Launcher {_launcherRelease.Version}…");
+            LauncherSelfUpdateButton.IsEnabled = false;
+
+            var progress = new Progress<string>(message => ActivityText.Text = message);
+            await _launcherSelfUpdateService.PrepareAndLaunchUpdateAsync(_launcherRelease, progress);
+
+            ActivityText.Text = "Mise à jour Launcher préparée. Fermeture pour remplacement…";
+            Application.Current.Shutdown();
+        }
+        catch (Exception ex)
+        {
+            LauncherSelfUpdateButton.IsEnabled = true;
+            SetBusy(false);
+            ActivityText.Text = $"Échec de mise à jour du Launcher : {ex.Message}";
+            MessageBox.Show(
+                ex.Message,
+                "Échec de mise à jour du Launcher",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
     }
 
     private async Task RefreshAsync()
@@ -215,6 +280,23 @@ public partial class MainWindow : Window
 
     private async void UpdateButton_Click(object sender, RoutedEventArgs e)
     {
+        if (_installedExecutable is null && !_settingsService.Current.InitialSetupCompleted)
+        {
+            var setup = new FirstInstallWindow(_settingsService)
+            {
+                Owner = this
+            };
+
+            if (setup.ShowDialog() != true)
+            {
+                ActivityText.Text = "Installation TL annulée avant choix des emplacements.";
+                return;
+            }
+
+            _settingsService.EnsureConfiguredDirectories();
+            InstallPathText.Text = $"TL sera installé dans {_labService.CanonicalInstallDirectory}.";
+        }
+
         if (_stableRelease is null)
         {
             MessageBox.Show("Aucune release stable n’est chargée.", "Taikeron Launcher", MessageBoxButton.OK, MessageBoxImage.Warning);
