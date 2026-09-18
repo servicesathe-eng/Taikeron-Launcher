@@ -141,6 +141,7 @@ public partial class MainWindow : Window
             LaunchButton.IsEnabled = false;
             UpdateButton.IsEnabled = false;
             ShaStatusText.Text = "Référence officielle indisponible";
+            FooterInstallStateText.Text = "⚠  État TL non vérifié";
             ActivityText.Text = $"Impossible d’établir l’état officiel de TL : {ex.Message}";
         }
         finally
@@ -205,6 +206,7 @@ public partial class MainWindow : Window
             LaunchButton.IsEnabled = false;
             UpdateButton.Content = "↓  Installer TL";
             ShaStatusText.Text = "Intégrité : non applicable";
+            FooterInstallStateText.Text = "◉  TL non installé";
             ActivityText.Text = $"TL pourra être installé dans {_labService.CanonicalInstallDirectory}.";
             return;
         }
@@ -219,6 +221,7 @@ public partial class MainWindow : Window
             LaunchButton.IsEnabled = false;
             UpdateButton.Content = "↻  Supprimer + réinstaller TL";
             ShaStatusText.Text = "Intégrité : ÉCHEC";
+            FooterInstallStateText.Text = "⚠  Installation TL à réparer";
             var detail = _integrityResult.Problems.FirstOrDefault();
             ActivityText.Text = string.IsNullOrWhiteSpace(detail)
                 ? _integrityResult.Message
@@ -234,6 +237,7 @@ public partial class MainWindow : Window
             LaunchButton.IsEnabled = true;
             UpdateButton.Content = updateAvailable ? "↻  Réinstaller la dernière version" : "↻  Réinstaller proprement";
             ShaStatusText.Text = $"Intégrité vérifiée · {_integrityResult.CheckedFiles} SHA-256";
+            FooterInstallStateText.Text = "✓  Installation TL vérifiée";
             ActivityText.Text = updateAvailable
                 ? $"{_integrityResult.Message} Une version plus récente est disponible."
                 : _integrityResult.Message;
@@ -246,6 +250,7 @@ public partial class MainWindow : Window
         LaunchButton.IsEnabled = true;
         UpdateButton.Content = updateAvailable ? "↻  Réinstaller la dernière version" : "↻  Réinstaller proprement";
         ShaStatusText.Text = "Intégrité : référence indisponible";
+        FooterInstallStateText.Text = "◉  Installation TL non certifiée";
         ActivityText.Text = _integrityResult?.Message ?? "Impossible de certifier les fichiers locaux.";
     }
 
