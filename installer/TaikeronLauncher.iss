@@ -43,3 +43,23 @@ Name: "{userdesktop}\Taikeron Launcher"; Filename: "{app}\TaikeronLauncher.exe";
 
 [Run]
 Filename: "{app}\TaikeronLauncher.exe"; Description: "Lancer Taikeron Launcher"; Flags: nowait postinstall skipifsilent
+
+
+[UninstallDelete]
+Type: filesandordirs; Name: "{localappdata}\Taikeron\Runtime\Lab"
+Type: filesandordirs; Name: "{localappdata}\Taikeron\Lab"
+Type: filesandordirs; Name: "{userappdata}\Taikeron\Lab"
+Type: filesandordirs; Name: "{localappdata}\Taikeron Lab"
+Type: filesandordirs; Name: "{userappdata}\Taikeron Lab"
+Type: filesandordirs; Name: "{localappdata}\taikeron-lab-cycling-os"
+Type: filesandordirs; Name: "{userappdata}\taikeron-lab-cycling-os"
+Type: filesandordirs; Name: "{localappdata}\com.taikeronlab.cyclingos"
+Type: filesandordirs; Name: "{userappdata}\com.taikeronlab.cyclingos"
+Type: filesandordirs; Name: "{tmp}\Taikeron\Lab"
+Type: filesandordirs; Name: "{tmp}\Taikeron Lab"
+Type: filesandordirs; Name: "{tmp}\Taikeron\LauncherSelfUpdate"
+Type: filesandordirs; Name: "{localappdata}\Taikeron\Launcher\Jobs"
+Type: filesandordirs; Name: "{localappdata}\Taikeron\Launcher\Downloads"
+Type: files; Name: "{localappdata}\Taikeron\Launcher\launcher-settings.json"
+Type: files; Name: "{localappdata}\CrashDumps\Taikeron Lab*.dmp"
+Type: files; Name: "{localappdata}\CrashDumps\TaikeronLab*.dmp"
