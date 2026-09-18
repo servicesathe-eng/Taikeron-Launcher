@@ -118,7 +118,6 @@ public partial class MainWindow : Window
                 : _installedExecutable;
 
             InstalledVersionText.Text = _installedVersion ?? "Non installé";
-            LaunchButton.IsEnabled = false;
 
             _stableRelease = await _labService.GetStableReleaseAsync();
             LatestVersionText.Text = string.IsNullOrWhiteSpace(_stableRelease?.Version) ? "—" : _stableRelease.Version;
@@ -138,7 +137,6 @@ public partial class MainWindow : Window
             StatusText.Text = "Vérification incomplète";
             LatestVersionText.Text = "Indisponible";
             UpdateBadge.Visibility = Visibility.Collapsed;
-            LaunchButton.IsEnabled = false;
             UpdateButton.IsEnabled = false;
             ShaStatusText.Text = "Référence officielle indisponible";
             FooterInstallStateText.Text = "⚠  État TL non vérifié";
@@ -204,7 +202,6 @@ public partial class MainWindow : Window
             StatusDot.Fill = Brushes.DarkOrange;
             StatusText.Foreground = Brushes.DarkOrange;
             StatusText.Text = "Non installé";
-            LaunchButton.IsEnabled = false;
             UpdateButton.Content = "↓  Installer TL";
             ShaStatusText.Text = "Intégrité : non applicable";
             FooterInstallStateText.Text = "◉  TL non installé";
@@ -219,7 +216,6 @@ public partial class MainWindow : Window
             StatusText.Text = "Installation altérée";
             UpdateBadge.Visibility = Visibility.Visible;
             UpdateBadgeText.Text = "Réparation requise";
-            LaunchButton.IsEnabled = false;
             UpdateButton.Content = "↻  Supprimer + réinstaller TL";
             ShaStatusText.Text = "Intégrité : ÉCHEC";
             FooterInstallStateText.Text = "⚠  Installation TL à réparer";
@@ -235,7 +231,6 @@ public partial class MainWindow : Window
             StatusDot.Fill = (Brush)FindResource("Green");
             StatusText.Foreground = (Brush)FindResource("Green");
             StatusText.Text = updateAvailable ? "Installé · intact" : "Installé · intact · à jour";
-            LaunchButton.IsEnabled = true;
             UpdateButton.Content = updateAvailable ? "↻  Réinstaller la dernière version" : "↻  Réinstaller proprement";
             ShaStatusText.Text = $"Intégrité vérifiée · {_integrityResult.CheckedFiles} SHA-256";
             FooterInstallStateText.Text = "✓  Installation TL vérifiée";
@@ -257,15 +252,44 @@ public partial class MainWindow : Window
 
     private void ApplyLaunchButtonState(bool updateAvailable)
     {
-        var readyForLatest = _installedExecutable is not null
-            && _integrityResult?.BlocksLaunch != true
-            && !updateAvailable;
+        var installed = _installedExecutable is not null;
+        var blocked = _integrityResult?.BlocksLaunch == true;
+        var readyForLatest = installed && !blocked && !updateAvailable;
 
         LaunchButton.Style = (Style)FindResource(readyForLatest ? "GoldButton" : "ActionButton");
+        LaunchButton.IsEnabled = readyForLatest || _stableRelease is not null;
+
+        if (readyForLatest)
+        {
+            LaunchButton.Content = "▶  Lancer";
+        }
+        else if (!installed)
+        {
+            LaunchButton.Content = "↓  Installer TL";
+        }
+        else if (blocked)
+        {
+            LaunchButton.Content = "↻  Réparer TL";
+        }
+        else
+        {
+            LaunchButton.Content = "↓  Mettre à jour TL";
+        }
     }
 
     private void LaunchButton_Click(object sender, RoutedEventArgs e)
     {
+        var updateAvailable = _labService.IsUpdateAvailable(_installedVersion, _stableRelease?.Version);
+        var readyForLatest = _installedExecutable is not null
+            && _integrityResult?.BlocksLaunch != true
+            && !updateAvailable;
+
+        if (!readyForLatest)
+        {
+            UpdateButton_Click(sender, e);
+            return;
+        }
+
         try
         {
             if (!_settingsService.Current.InitialSetupCompleted)
@@ -488,12 +512,11 @@ public partial class MainWindow : Window
         if (busy)
         {
             UpdateButton.IsEnabled = false;
-            LaunchButton.IsEnabled = false;
         }
         else
         {
             UpdateButton.IsEnabled = _stableRelease is not null;
-            LaunchButton.IsEnabled = _installedExecutable is not null && _integrityResult?.BlocksLaunch != true;
+            ApplyLaunchButtonState(_labService.IsUpdateAvailable(_installedVersion, _stableRelease?.Version));
         }
 
         if (!string.IsNullOrWhiteSpace(text))
