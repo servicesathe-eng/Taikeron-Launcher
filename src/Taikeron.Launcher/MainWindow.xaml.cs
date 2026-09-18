@@ -197,6 +197,7 @@ public partial class MainWindow : Window
         UpdateButton.IsEnabled = _stableRelease is not null;
         UpdateBadge.Visibility = updateAvailable ? Visibility.Visible : Visibility.Collapsed;
         UpdateBadgeText.Text = updateAvailable ? "Mise à jour disponible" : "";
+        ApplyLaunchButtonState(updateAvailable);
 
         if (_installedExecutable is null || _integrityResult?.State == TlIntegrityState.NotInstalled)
         {
@@ -252,6 +253,15 @@ public partial class MainWindow : Window
         ShaStatusText.Text = "Intégrité : référence indisponible";
         FooterInstallStateText.Text = "◉  Installation TL non certifiée";
         ActivityText.Text = _integrityResult?.Message ?? "Impossible de certifier les fichiers locaux.";
+    }
+
+    private void ApplyLaunchButtonState(bool updateAvailable)
+    {
+        var readyForLatest = _installedExecutable is not null
+            && _integrityResult?.BlocksLaunch != true
+            && !updateAvailable;
+
+        LaunchButton.Style = (Style)FindResource(readyForLatest ? "GoldButton" : "ActionButton");
     }
 
     private void LaunchButton_Click(object sender, RoutedEventArgs e)
