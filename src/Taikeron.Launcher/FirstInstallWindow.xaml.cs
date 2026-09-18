@@ -16,14 +16,18 @@ public partial class FirstInstallWindow : Window
 
         var settings = settingsService.Current;
         AppsRootBox.Text = settings.AppsRoot;
-        VaultRootBox.Text = settings.DataVaultRoot;
+        DataRootBox.Text = settings.DataRoot;
+        VaultRootBox.Text = settings.VaultRoot;
     }
 
     private void BrowseApps_Click(object sender, RoutedEventArgs e) =>
         BrowseInto(AppsRootBox, "Dossier des applications Taikeron");
 
+    private void BrowseData_Click(object sender, RoutedEventArgs e) =>
+        BrowseInto(DataRootBox, "Dossier Data Taikeron");
+
     private void BrowseVault_Click(object sender, RoutedEventArgs e) =>
-        BrowseInto(VaultRootBox, "Dossier des données personnelles Taikeron");
+        BrowseInto(VaultRootBox, "Dossier Vault Taikeron");
 
     private static void BrowseInto(System.Windows.Controls.TextBox textBox, string title)
     {
@@ -42,29 +46,36 @@ public partial class FirstInstallWindow : Window
         try
         {
             var apps = LauncherSettingsService.NormalizePath(AppsRootBox.Text);
+            var data = LauncherSettingsService.NormalizePath(DataRootBox.Text);
             var vault = LauncherSettingsService.NormalizePath(VaultRootBox.Text);
             if (string.IsNullOrWhiteSpace(apps)
+                || string.IsNullOrWhiteSpace(data)
                 || string.IsNullOrWhiteSpace(vault))
             {
                 throw new InvalidOperationException(
-                    "Les emplacements Applications et Données personnelles sont obligatoires.");
+                    "Les emplacements Applications, Data et Vault sont obligatoires.");
             }
 
-            var vaultParent = Directory.GetParent(vault)?.FullName;
-            var maps = Path.Combine(string.IsNullOrWhiteSpace(vaultParent) ? vault : vaultParent, "Maps");
+            var storageRoot = LauncherSettingsService.GetCommonStorageRoot(data, vault);
+            var maps = Path.Combine(storageRoot, "Maps");
 
             var tlCodeDirectory = Path.Combine(apps, "Lab");
-            if (PathsOverlap(vault, tlCodeDirectory))
+            if (PathsOverlap(data, tlCodeDirectory) || PathsOverlap(vault, tlCodeDirectory))
             {
                 throw new InvalidOperationException(
-                    "Le dossier des données personnelles doit être séparé du dossier code de Taikeron Lab.");
+                    "Data et Vault doivent être séparés du dossier code de Taikeron Lab.");
             }
+
+            if (PathsOverlap(data, vault))
+                throw new InvalidOperationException("Data et Vault doivent être deux dossiers distincts.");
 
             var current = _settingsService.Current;
             var settings = new LauncherSettings
             {
                 AppsRoot = apps,
-                DataVaultRoot = vault,
+                DataRoot = data,
+                VaultRoot = vault,
+                DataVaultRoot = storageRoot,
                 MapsRoot = maps,
                 DownloadsRoot = current.DownloadsRoot,
                 BackupRoot = current.BackupRoot,
