@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text.Json;
+using Taikeron.Shared;
 
 namespace Taikeron.UpdateWorker;
 
@@ -105,6 +106,11 @@ internal static class ProgramV2
                 jobDirectory,
                 out preservedMapsPath);
 
+            WriteStatus(statusFile, "purging-runtime", "Suppression complète des profils et caches Electron/Chromium de TL.");
+            var runtimeCleanup = TlRuntimeCleanup.PurgeVolatileState(
+                new[] { dataRoot, vaultRoot, mapsRoot },
+                message => WriteStatus(statusFile, "purging-runtime", message));
+
             if (Directory.Exists(installDirectory))
             {
                 WriteStatus(statusFile, "cleaning", "Suppression réelle de l’ancien code Taikeron Lab.");
@@ -201,7 +207,7 @@ internal static class ProgramV2
                 CompletedAtUtc = DateTimeOffset.UtcNow
             });
 
-            WriteStatus(statusFile, "completed", "Ancien runtime supprimé et nouveau runtime TL vérifié.");
+            WriteStatus(statusFile, "completed", $"Ancien runtime supprimé, {runtimeCleanup.RemovedDirectories.Count} profil(s)/cache(s) Electron purgé(s), nouveau runtime TL vérifié.");
             return 0;
         }
         catch (Exception ex)
