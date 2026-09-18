@@ -140,9 +140,9 @@ internal static class ProgramV2
 
             if (!string.IsNullOrWhiteSpace(targetVersion) &&
                 !string.IsNullOrWhiteSpace(installedFileVersion) &&
-                !string.Equals(installedFileVersion, targetVersion, StringComparison.OrdinalIgnoreCase))
+                !IsCompatibleWindowsFileVersion(installedFileVersion, targetVersion))
             {
-                throw new InvalidDataException($"Version installée {installedFileVersion} différente de la cible {targetVersion}.");
+                throw new InvalidDataException($"Version Windows {installedFileVersion} incompatible avec la cible produit {targetVersion}.");
             }
 
             if (!SameVersion(request.CurrentVersion, request.TargetVersion))
@@ -157,6 +157,18 @@ internal static class ProgramV2
                     throw new InvalidDataException("Le nouvel exécutable est identique à l’ancien malgré un changement de version.");
                 }
             }
+
+            var installationProofPath = Path.Combine(installDirectory, ".taikeron-installation.json");
+            await WriteJsonAsync(installationProofPath, new
+            {
+                format = "taikeron_launcher_installation",
+                schemaVersion = "1.0.0",
+                product = "TL",
+                version = request.TargetVersion,
+                installerSha256 = installerSha,
+                windowsFileVersion = installedFileVersion,
+                installedAtUtc = DateTimeOffset.UtcNow
+            });
 
             await WriteJsonAsync(resultFile, new ReplaceResult
             {
@@ -468,6 +480,29 @@ internal static class ProgramV2
 
     private static bool SameVersion(string? left, string? right) =>
         string.Equals(NormalizeVersion(left), NormalizeVersion(right), StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsCompatibleWindowsFileVersion(string? windowsFileVersion, string? productVersion)
+    {
+        var windowsNormalized = NormalizeVersion(windowsFileVersion);
+        var productNormalized = NormalizeVersion(productVersion);
+
+        if (string.Equals(windowsNormalized, productNormalized, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (!Version.TryParse(windowsNormalized, out var windows) ||
+            !Version.TryParse(productNormalized, out var product))
+            return false;
+
+        // Electron/npm encode le 4e segment produit comme suffixe SemVer (ex. 2.302.6-4).
+        // La ressource PE Windows peut alors exposer 2.302.6.0. Les trois premiers
+        // segments doivent rester identiques ; le Launcher conserve le 4e segment
+        // canonique dans sa preuve d'installation.
+        return windows.Major == product.Major
+            && windows.Minor == product.Minor
+            && windows.Build == product.Build
+            && windows.Revision == 0
+            && product.Revision > 0;
+    }
 
     private static string NormalizeVersion(string? value)
     {
