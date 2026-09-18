@@ -288,6 +288,9 @@ public sealed class TaikeronLabService
         if (Directory.Exists(installDirectory))
             throw new IOException("Le dossier Taikeron Lab existe encore après la désinstallation.");
 
+        progress?.Report("Suppression des paquets TL téléchargés et temporaires…");
+        CleanupTlDownloads(_settingsService.Current.DownloadsRoot);
+
         return new TlUninstallResult(
             true,
             installDirectory,
@@ -365,6 +368,26 @@ public sealed class TaikeronLabService
             if (!File.Exists(target))
                 File.Copy(file, target);
         }
+    }
+
+    private static void CleanupTlDownloads(string downloadsRoot)
+    {
+        try
+        {
+            if (!Directory.Exists(downloadsRoot))
+                return;
+
+            foreach (var file in Directory.EnumerateFiles(downloadsRoot, "Taikeron-Lab-*", SearchOption.TopDirectoryOnly))
+            {
+                try
+                {
+                    File.SetAttributes(file, FileAttributes.Normal);
+                    File.Delete(file);
+                }
+                catch { }
+            }
+        }
+        catch { }
     }
 
     private static void DeleteDirectoryStrict(string directory)
