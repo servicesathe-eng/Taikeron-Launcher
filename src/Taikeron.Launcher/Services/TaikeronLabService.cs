@@ -47,8 +47,44 @@ public sealed class TaikeronLabService
         if (string.IsNullOrWhiteSpace(executablePath) || !File.Exists(executablePath))
             return null;
 
+        var installDirectory = Path.GetDirectoryName(Path.GetFullPath(executablePath));
+        if (!string.IsNullOrWhiteSpace(installDirectory))
+        {
+            var proofPath = Path.Combine(installDirectory, ".taikeron-installation.json");
+            var proofVersion = TryReadLauncherInstallationVersion(proofPath);
+            if (!string.IsNullOrWhiteSpace(proofVersion))
+                return proofVersion;
+        }
+
         var info = FileVersionInfo.GetVersionInfo(executablePath);
         return NormalizeVersion(info.ProductVersion) ?? NormalizeVersion(info.FileVersion);
+    }
+
+    private static string? TryReadLauncherInstallationVersion(string proofPath)
+    {
+        try
+        {
+            if (!File.Exists(proofPath))
+                return null;
+
+            using var document = JsonDocument.Parse(File.ReadAllText(proofPath));
+            var root = document.RootElement;
+
+            var format = root.TryGetProperty("format", out var formatNode) ? formatNode.GetString() : null;
+            var product = root.TryGetProperty("product", out var productNode) ? productNode.GetString() : null;
+            var version = root.TryGetProperty("version", out var versionNode) ? versionNode.GetString() : null;
+
+            if (!string.Equals(format, "taikeron_launcher_installation", StringComparison.Ordinal) ||
+                !string.Equals(product, "TL", StringComparison.OrdinalIgnoreCase))
+                return null;
+
+            var normalized = NormalizeVersion(version);
+            return Version.TryParse(normalized, out _) ? normalized : null;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     public async Task<TlReleaseManifest?> GetStableReleaseAsync(CancellationToken cancellationToken = default)
