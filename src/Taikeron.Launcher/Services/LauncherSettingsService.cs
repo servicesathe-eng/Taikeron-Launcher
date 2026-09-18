@@ -35,8 +35,15 @@ public sealed class LauncherSettingsService
                 var loaded = JsonSerializer.Deserialize<LauncherSettings>(json, JsonOptions);
                 if (loaded is not null)
                 {
+                    var legacyVaultRoot = string.IsNullOrWhiteSpace(loaded.DataRoot)
+                        && string.IsNullOrWhiteSpace(loaded.VaultRoot)
+                        ? loaded.DataVaultRoot
+                        : string.Empty;
+
                     ApplyMissingDefaults(loaded);
+                    MigrateLegacyLayout(legacyVaultRoot, loaded);
                     Current = loaded;
+                    PersistWithoutReapplying(loaded);
                     return loaded;
                 }
             }
@@ -56,15 +63,15 @@ public sealed class LauncherSettingsService
     {
         ApplyMissingDefaults(settings);
         Directory.CreateDirectory(SettingsDirectory);
-        var json = JsonSerializer.Serialize(settings, JsonOptions);
-        File.WriteAllText(SettingsPath, json);
+        PersistWithoutReapplying(settings);
         Current = settings;
     }
 
     public void EnsureConfiguredDirectories()
     {
         CreateIfDriveReady(Current.AppsRoot);
-        CreateIfDriveReady(Current.DataVaultRoot);
+        CreateIfDriveReady(Current.DataRoot);
+        CreateIfDriveReady(Current.VaultRoot);
         CreateIfDriveReady(Current.MapsRoot);
         CreateIfDriveReady(Current.DownloadsRoot);
     }
@@ -77,14 +84,62 @@ public sealed class LauncherSettingsService
         return Path.GetFullPath(Environment.ExpandEnvironmentVariables(path.Trim()));
     }
 
+    public static string GetCommonStorageRoot(string dataRoot, string vaultRoot)
+    {
+        var data = NormalizePath(dataRoot).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var vault = NormalizePath(vaultRoot).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var dataParent = Directory.GetParent(data)?.FullName;
+        var vaultParent = Directory.GetParent(vault)?.FullName;
+
+        if (string.IsNullOrWhiteSpace(dataParent) ||
+            string.IsNullOrWhiteSpace(vaultParent) ||
+            !string.Equals(dataParent, vaultParent, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "Data et Vault doivent actuellement être deux dossiers séparés placés dans le même dossier parent.");
+        }
+
+        return dataParent;
+    }
+
     private static void ApplyMissingDefaults(LauncherSettings settings)
     {
         var defaults = LauncherSettings.CreateDefault();
-        settings.AppsRoot = string.IsNullOrWhiteSpace(settings.AppsRoot) ? defaults.AppsRoot : NormalizePath(settings.AppsRoot);
-        settings.DataVaultRoot = string.IsNullOrWhiteSpace(settings.DataVaultRoot) ? defaults.DataVaultRoot : NormalizePath(settings.DataVaultRoot);
-        settings.MapsRoot = string.IsNullOrWhiteSpace(settings.MapsRoot) ? DefaultMapsRoot(settings.DataVaultRoot) : NormalizePath(settings.MapsRoot);
-        settings.DownloadsRoot = string.IsNullOrWhiteSpace(settings.DownloadsRoot) ? defaults.DownloadsRoot : NormalizePath(settings.DownloadsRoot);
-        settings.BackupRoot = string.IsNullOrWhiteSpace(settings.BackupRoot) ? string.Empty : NormalizePath(settings.BackupRoot);
+
+        settings.AppsRoot = string.IsNullOrWhiteSpace(settings.AppsRoot)
+            ? defaults.AppsRoot
+            : NormalizePath(settings.AppsRoot);
+
+        if (string.IsNullOrWhiteSpace(settings.DataRoot) || string.IsNullOrWhiteSpace(settings.VaultRoot))
+        {
+            var legacy = string.IsNullOrWhiteSpace(settings.DataVaultRoot)
+                ? string.Empty
+                : NormalizePath(settings.DataVaultRoot);
+
+            var parent = LegacyStorageParent(legacy) ?? Path.GetDirectoryName(defaults.DataRoot)!;
+            settings.DataRoot = string.IsNullOrWhiteSpace(settings.DataRoot)
+                ? Path.Combine(parent, "Data")
+                : NormalizePath(settings.DataRoot);
+            settings.VaultRoot = string.IsNullOrWhiteSpace(settings.VaultRoot)
+                ? Path.Combine(parent, "Vault")
+                : NormalizePath(settings.VaultRoot);
+        }
+        else
+        {
+            settings.DataRoot = NormalizePath(settings.DataRoot);
+            settings.VaultRoot = NormalizePath(settings.VaultRoot);
+        }
+
+        settings.DataVaultRoot = GetCommonStorageRoot(settings.DataRoot, settings.VaultRoot);
+        settings.MapsRoot = string.IsNullOrWhiteSpace(settings.MapsRoot)
+            ? Path.Combine(settings.DataVaultRoot, "Maps")
+            : NormalizePath(settings.MapsRoot);
+        settings.DownloadsRoot = string.IsNullOrWhiteSpace(settings.DownloadsRoot)
+            ? defaults.DownloadsRoot
+            : NormalizePath(settings.DownloadsRoot);
+        settings.BackupRoot = string.IsNullOrWhiteSpace(settings.BackupRoot)
+            ? string.Empty
+            : NormalizePath(settings.BackupRoot);
         settings.BackupIntervalHours = Math.Clamp(settings.BackupIntervalHours, 1, 24 * 30);
         settings.BackupRetentionCount = Math.Clamp(settings.BackupRetentionCount, 1, 365);
         settings.LastBackupStatus = string.IsNullOrWhiteSpace(settings.LastBackupStatus)
@@ -92,11 +147,87 @@ public sealed class LauncherSettingsService
             : settings.LastBackupStatus;
     }
 
-    private static string DefaultMapsRoot(string dataVaultRoot)
+    private static string? LegacyStorageParent(string legacyRoot)
     {
-        var vault = NormalizePath(dataVaultRoot);
-        var parent = Directory.GetParent(vault)?.FullName;
-        return Path.Combine(string.IsNullOrWhiteSpace(parent) ? vault : parent, "Maps");
+        if (string.IsNullOrWhiteSpace(legacyRoot))
+            return null;
+
+        var full = NormalizePath(legacyRoot)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+        if (string.Equals(Path.GetFileName(full), "DataVault", StringComparison.OrdinalIgnoreCase))
+            return Directory.GetParent(full)?.FullName;
+
+        return full;
+    }
+
+    private static void MigrateLegacyLayout(string legacyRoot, LauncherSettings settings)
+    {
+        if (string.IsNullOrWhiteSpace(legacyRoot))
+            return;
+
+        var legacy = NormalizePath(legacyRoot)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+        if (!string.Equals(Path.GetFileName(legacy), "DataVault", StringComparison.OrdinalIgnoreCase))
+            return;
+
+        MoveLegacyDirectory(Path.Combine(legacy, "data"), settings.DataRoot);
+        MoveLegacyDirectory(Path.Combine(legacy, "vault"), settings.VaultRoot);
+
+        try
+        {
+            if (Directory.Exists(legacy) && !Directory.EnumerateFileSystemEntries(legacy).Any())
+                Directory.Delete(legacy);
+        }
+        catch
+        {
+            // Migration is best effort; old data is never destroyed on failure.
+        }
+    }
+
+    private static void MoveLegacyDirectory(string source, string destination)
+    {
+        if (!Directory.Exists(source))
+            return;
+
+        Directory.CreateDirectory(destination);
+
+        foreach (var directory in Directory.EnumerateDirectories(source, "*", SearchOption.AllDirectories))
+            Directory.CreateDirectory(Path.Combine(destination, Path.GetRelativePath(source, directory)));
+
+        foreach (var file in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories))
+        {
+            var target = Path.Combine(destination, Path.GetRelativePath(source, file));
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+
+            if (!File.Exists(target))
+                File.Move(file, target);
+        }
+
+        try
+        {
+            foreach (var directory in Directory.EnumerateDirectories(source, "*", SearchOption.AllDirectories)
+                         .OrderByDescending(path => path.Length))
+            {
+                if (!Directory.EnumerateFileSystemEntries(directory).Any())
+                    Directory.Delete(directory);
+            }
+
+            if (!Directory.EnumerateFileSystemEntries(source).Any())
+                Directory.Delete(source);
+        }
+        catch
+        {
+            // Any collision keeps the legacy copy in place rather than overwriting data.
+        }
+    }
+
+    private void PersistWithoutReapplying(LauncherSettings settings)
+    {
+        Directory.CreateDirectory(SettingsDirectory);
+        var json = JsonSerializer.Serialize(settings, JsonOptions);
+        File.WriteAllText(SettingsPath, json);
     }
 
     private static void CreateIfDriveReady(string path)
