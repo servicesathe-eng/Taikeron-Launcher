@@ -11,5 +11,6 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="ProgramV2.cs" />
+    <Compile Include="..\Taikeron.Shared\TlRuntimeCleanup.cs" Link="TlRuntimeCleanup.cs" />
   </ItemGroup>
 </Project>
