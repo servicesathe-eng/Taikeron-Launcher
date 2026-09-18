@@ -69,7 +69,7 @@
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
-                    <Border Grid.Row="0" Background="#16271E" BorderBrush="{StaticResource Gold}" BorderThickness="1" CornerRadius="7" Padding="12" Margin="0,0,0,8">
+                    <Border x:Name="TlProductCard" Grid.Row="0" Tag="TL" Background="#16271E" BorderBrush="{StaticResource Gold}" BorderThickness="1" CornerRadius="7" Padding="12" Margin="0,0,0,8" Cursor="Hand" MouseLeftButtonUp="ProductCard_MouseLeftButtonUp">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="48"/>
@@ -85,7 +85,7 @@
                         </Grid>
                     </Border>
 
-                    <Border Grid.Row="1" Background="#091923" BorderBrush="#253B49" BorderThickness="1" CornerRadius="7" Padding="12" Margin="0,0,0,8">
+                    <Border x:Name="TmbProductCard" Grid.Row="1" Tag="TMB" Background="#091923" BorderBrush="#253B49" BorderThickness="1" CornerRadius="7" Padding="12" Margin="0,0,0,8" Cursor="Hand" MouseLeftButtonUp="ProductCard_MouseLeftButtonUp">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="48"/>
@@ -142,12 +142,12 @@
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
                         <Border Width="76" Height="76" CornerRadius="12" BorderBrush="{StaticResource Gold}" BorderThickness="1" Background="#091923">
-                            <TextBlock Text="TL" Foreground="{StaticResource GoldBright}" FontSize="31" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="ProductHeroCodeText" Text="TL" Foreground="{StaticResource GoldBright}" FontSize="31" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                            <TextBlock Text="Taikeron Lab (TL)" FontSize="27" FontWeight="SemiBold"/>
-                            <TextBlock Text="Création, édition et analyse de parcours cyclistes." FontSize="16" Margin="0,5,0,0"/>
-                            <TextBlock Text="Le launcher devient le point d’entrée, de mise à jour et de réparation de TL." Foreground="{StaticResource Muted}" FontSize="13" Margin="0,5,0,0"/>
+                            <TextBlock x:Name="ProductHeroTitleText" Text="Taikeron Lab (TL)" FontSize="27" FontWeight="SemiBold"/>
+                            <TextBlock x:Name="ProductHeroSubtitleText" Text="Création, édition et analyse de parcours cyclistes." FontSize="16" Margin="0,5,0,0"/>
+                            <TextBlock x:Name="ProductHeroDescriptionText" Text="Le launcher devient le point d’entrée, de mise à jour et de réparation de TL." Foreground="{StaticResource Muted}" FontSize="13" Margin="0,5,0,0"/>
                         </StackPanel>
                     </Grid>
 
