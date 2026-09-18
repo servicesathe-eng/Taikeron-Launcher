@@ -57,7 +57,7 @@ public sealed class TaikeronLabService
         }
 
         var info = FileVersionInfo.GetVersionInfo(executablePath);
-        return NormalizeVersion(info.ProductVersion) ?? NormalizeVersion(info.FileVersion);
+        return NormalizeVersion(info.FileVersion) ?? NormalizeVersion(info.ProductVersion);
     }
 
     private static string? TryReadLauncherInstallationVersion(string proofPath)
