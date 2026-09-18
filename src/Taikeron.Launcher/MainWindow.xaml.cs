@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Media;
+using System.Windows.Input;
 using System.Windows.Threading;
 using Taikeron.Launcher.Models;
 using Taikeron.Launcher.Services;
@@ -22,6 +23,7 @@ public partial class MainWindow : Window
     private string? _installedExecutable;
     private string? _installedVersion;
     private bool _backupInProgress;
+    private string _selectedProduct = "TL";
 
     public MainWindow()
     {
@@ -45,6 +47,87 @@ public partial class MainWindow : Window
         Closed += (_, _) => _backupTimer.Stop();
     }
 
+
+    private async void ProductCard_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not FrameworkElement element || element.Tag is not string product)
+            return;
+
+        await SelectProductAsync(product);
+    }
+
+    private async Task SelectProductAsync(string product)
+    {
+        _selectedProduct = product;
+        ApplySidebarSelection();
+
+        if (string.Equals(product, "TMB", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyTmbPanel();
+            return;
+        }
+
+        ApplyTlIdentity();
+        await RefreshAsync();
+    }
+
+    private void ApplySidebarSelection()
+    {
+        var gold = (Brush)FindResource("Gold");
+        var inactiveBorder = new SolidColorBrush(Color.FromRgb(0x25, 0x3B, 0x49));
+        var activeBackground = new SolidColorBrush(Color.FromRgb(0x16, 0x27, 0x1E));
+        var inactiveBackground = new SolidColorBrush(Color.FromRgb(0x09, 0x19, 0x23));
+
+        var tlSelected = string.Equals(_selectedProduct, "TL", StringComparison.OrdinalIgnoreCase);
+        TlProductCard.BorderBrush = tlSelected ? gold : inactiveBorder;
+        TlProductCard.Background = tlSelected ? activeBackground : inactiveBackground;
+        TmbProductCard.BorderBrush = tlSelected ? inactiveBorder : gold;
+        TmbProductCard.Background = tlSelected ? inactiveBackground : activeBackground;
+    }
+
+    private void ApplyTlIdentity()
+    {
+        ProductHeroCodeText.Text = "TL";
+        ProductHeroTitleText.Text = "Taikeron Lab (TL)";
+        ProductHeroSubtitleText.Text = "Création, édition et analyse de parcours cyclistes.";
+        ProductHeroDescriptionText.Text = "Le Launcher installe, vérifie, répare et met à jour TL.";
+        ProductBullet1Text.Text = "• Distribution centralisée par le Launcher";
+        ProductBullet2Text.Text = "• Vérification taille + SHA-256";
+        ProductBullet3Text.Text = "• Remplacement complet du code, Data/Vault protégés";
+        RepairActionButton.IsEnabled = true;
+    }
+
+    private void ApplyTmbPanel()
+    {
+        ProductHeroCodeText.Text = "TMB";
+        ProductHeroTitleText.Text = "Taikeron Map Builder (TMB)";
+        ProductHeroSubtitleText.Text = "Création et préparation de cartes Taikeron.";
+        ProductHeroDescriptionText.Text = "TMB est maintenant sélectionnable depuis la colonne de gauche.";
+        ProductBullet1Text.Text = "• Outil Windows de génération cartographique";
+        ProductBullet2Text.Text = "• Gestion séparée des cartes Taikeron";
+        ProductBullet3Text.Text = "• Intégration Launcher prévue dans une étape dédiée";
+
+        StatusDot.Fill = (Brush)FindResource("Gold");
+        StatusText.Foreground = (Brush)FindResource("GoldBright");
+        StatusText.Text = "TMB sélectionné";
+        UpdateBadge.Visibility = Visibility.Collapsed;
+        InstalledVersionText.Text = "—";
+        LatestVersionText.Text = "—";
+        InstallPathText.Text = "La sélection TMB est active. Installation et mise à jour TMB restent séparées pour le moment.";
+        VersionCardValue.Text = "TMB";
+        DownloadSizeText.Text = "Taille : —";
+        VersionDateText.Text = "Publication : —";
+        LaunchButton.Content = "▶  Lancer TMB";
+        LaunchButton.Style = (Style)FindResource("ActionButton");
+        LaunchButton.IsEnabled = false;
+        UpdateButton.Content = "↓  Mettre à jour TMB";
+        UpdateButton.IsEnabled = false;
+        RepairActionButton.IsEnabled = false;
+        ShaStatusText.Text = "Gestion TMB non activée";
+        FooterInstallStateText.Text = "◉  TMB sélectionné";
+        ActivityText.Text = "TMB est sélectionné dans le Launcher.";
+        DownloadProgress.Visibility = Visibility.Collapsed;
+    }
 
     private async Task<bool> CheckLauncherSelfUpdateAsync()
     {
@@ -122,6 +205,12 @@ public partial class MainWindow : Window
 
     private async Task RefreshAsync()
     {
+        if (!string.Equals(_selectedProduct, "TL", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyTmbPanel();
+            return;
+        }
+
         SetBusy(true, "Vérification de Taikeron Lab…");
 
         try
@@ -295,6 +384,9 @@ public partial class MainWindow : Window
 
     private void LaunchButton_Click(object sender, RoutedEventArgs e)
     {
+        if (!string.Equals(_selectedProduct, "TL", StringComparison.OrdinalIgnoreCase))
+            return;
+
         var updateAvailable = _labService.IsUpdateAvailable(_installedVersion, _stableRelease?.Version);
         var readyForLatest = _installedExecutable is not null
             && _integrityResult?.BlocksLaunch != true
@@ -351,6 +443,9 @@ public partial class MainWindow : Window
 
     private async void UpdateButton_Click(object sender, RoutedEventArgs e)
     {
+        if (!string.Equals(_selectedProduct, "TL", StringComparison.OrdinalIgnoreCase))
+            return;
+
         if (_installedExecutable is null && !_settingsService.Current.InitialSetupCompleted)
         {
             var setup = new FirstInstallWindow(_settingsService)
@@ -449,18 +544,31 @@ public partial class MainWindow : Window
 
     private async void RefreshButton_Click(object sender, RoutedEventArgs e)
     {
-        await RefreshAsync();
+        if (string.Equals(_selectedProduct, "TL", StringComparison.OrdinalIgnoreCase))
+            await RefreshAsync();
+        else
+            ApplyTmbPanel();
     }
 
     private async void RepairButton_Click(object sender, RoutedEventArgs e)
     {
+        if (!string.Equals(_selectedProduct, "TL", StringComparison.OrdinalIgnoreCase))
+        {
+            MessageBox.Show(
+                "TMB est bien sélectionné. Sa gestion installation/réparation sera branchée séparément.",
+                "Taikeron Map Builder",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            return;
+        }
+
         await RefreshAsync();
 
         var settings = _settingsService.Current;
         var truth = _integrityResult?.Message ?? "État d’intégrité inconnu.";
         var message = _installedExecutable is null
-            ? $"TL n’est pas détecté.\n\nDossier code prévu :\n{_labService.CanonicalInstallDirectory}\n\nData Vault :\n{settings.DataVaultRoot}\n\n{truth}"
-            : $"Installation détectée :\n{_installedExecutable}\n\nVersion : {_installedVersion ?? "inconnue"}\n\nData Vault :\n{settings.DataVaultRoot}\n\nVérité Launcher :\n{truth}\n\nLe Data Vault n’est jamais inclus dans le contrôle d’intégrité du code.";
+            ? $"TL n’est pas détecté.\n\nDossier code prévu :\n{_labService.CanonicalInstallDirectory}\n\nData :\n{settings.DataRoot}\n\nVault :\n{settings.VaultRoot}\n\n{truth}"
+            : $"Installation détectée :\n{_installedExecutable}\n\nVersion : {_installedVersion ?? "inconnue"}\n\nData :\n{settings.DataRoot}\n\nVault :\n{settings.VaultRoot}\n\nVérité Launcher :\n{truth}\n\nData et Vault ne sont jamais inclus dans le contrôle d’intégrité du code.";
 
         MessageBox.Show(message, "Diagnostic TL", MessageBoxButton.OK, MessageBoxImage.Information);
     }
@@ -500,7 +608,7 @@ public partial class MainWindow : Window
         }
 
         _backupInProgress = true;
-        ActivityText.Text = "Sauvegarde automatique du Data Vault en cours…";
+        ActivityText.Text = "Sauvegarde automatique Data + Vault en cours…";
 
         try
         {
@@ -508,7 +616,7 @@ public partial class MainWindow : Window
             settings.LastBackupStatus = result.Message;
             _settingsService.Save(settings);
             ActivityText.Text = result.Success
-                ? $"Data Vault sauvegardé : {result.SnapshotPath}"
+                ? $"Data + Vault sauvegardés : {result.SnapshotPath}"
                 : result.Message;
         }
         catch (Exception ex)
@@ -525,13 +633,20 @@ public partial class MainWindow : Window
 
     private void SetBusy(bool busy, string? text = null)
     {
-        if (busy)
+        if (!string.Equals(_selectedProduct, "TL", StringComparison.OrdinalIgnoreCase))
+        {
+            LaunchButton.IsEnabled = false;
+            UpdateButton.IsEnabled = false;
+            RepairActionButton.IsEnabled = false;
+        }
+        else if (busy)
         {
             UpdateButton.IsEnabled = false;
         }
         else
         {
             UpdateButton.IsEnabled = _stableRelease is not null;
+            RepairActionButton.IsEnabled = true;
             ApplyLaunchButtonState(_labService.IsUpdateAvailable(_installedVersion, _stableRelease?.Version));
         }
 
