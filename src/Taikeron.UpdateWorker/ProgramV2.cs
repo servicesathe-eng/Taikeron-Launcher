@@ -135,7 +135,7 @@ internal static class ProgramV2
             var newExeSha = await ComputeSha256Async(installedExecutable);
             var newAsarSha = await ComputeSha256Async(installedAsar);
             var versionInfo = FileVersionInfo.GetVersionInfo(installedExecutable);
-            var installedFileVersion = NormalizeVersion(versionInfo.ProductVersion ?? versionInfo.FileVersion ?? string.Empty);
+            var installedFileVersion = NormalizeVersion(versionInfo.FileVersion ?? versionInfo.ProductVersion ?? string.Empty);
             var targetVersion = NormalizeVersion(request.TargetVersion);
 
             if (!string.IsNullOrWhiteSpace(targetVersion) &&
