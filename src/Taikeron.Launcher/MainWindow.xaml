@@ -171,14 +171,17 @@
                     <Grid Grid.Row="2" Margin="0,17,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="12"/>
+                            <ColumnDefinition Width="10"/>
                             <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="12"/>
+                            <ColumnDefinition Width="10"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="10"/>
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
                         <Button x:Name="LaunchButton" Grid.Column="0" Content="▶  Lancer" Style="{StaticResource GoldButton}" Click="LaunchButton_Click"/>
                         <Button x:Name="UpdateButton" Grid.Column="2" Content="↓  Mettre à jour" Style="{StaticResource ActionButton}" Click="UpdateButton_Click"/>
                         <Button x:Name="RepairActionButton" Grid.Column="4" Content="⌕  Réparer" Style="{StaticResource ActionButton}" Click="RepairButton_Click"/>
+                        <Button x:Name="UninstallButton" Grid.Column="6" Content="✕  Désinstaller TL" Style="{StaticResource ActionButton}" Click="UninstallButton_Click"/>
                     </Grid>
 
                     <Grid Grid.Row="3" Margin="0,18,0,0">
