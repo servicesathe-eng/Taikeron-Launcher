@@ -6,7 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>TaikeronLauncherUpdater</AssemblyName>
     <RootNamespace>Taikeron.LauncherUpdater</RootNamespace>
-    <Version>0.4.3</Version>
+    <Version>0.4.4</Version>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>true</SelfContained>
     <PublishSingleFile>true</PublishSingleFile>
