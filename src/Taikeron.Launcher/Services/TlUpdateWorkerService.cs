@@ -71,6 +71,7 @@ public sealed class TlUpdateWorkerService
             vaultRoot = Path.GetFullPath(_settingsService.Current.VaultRoot),
             dataVaultRoot = Path.GetFullPath(_settingsService.Current.DataVaultRoot),
             mapsRoot = Path.GetFullPath(_settingsService.Current.MapsRoot),
+            backupRoot = string.IsNullOrWhiteSpace(_settingsService.Current.BackupRoot) ? string.Empty : Path.GetFullPath(_settingsService.Current.BackupRoot),
             jobDirectory,
             statusFile,
             resultFile
