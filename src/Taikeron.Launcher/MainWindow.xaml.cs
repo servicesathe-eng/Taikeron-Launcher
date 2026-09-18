@@ -34,7 +34,9 @@ public partial class MainWindow : Window
         Loaded += async (_, _) =>
         {
             LauncherVersionText.Text = $"v{_launcherSelfUpdateService.CurrentVersion}";
-            await CheckLauncherSelfUpdateAsync();
+            if (await CheckLauncherSelfUpdateAsync())
+                return;
+
             _settingsService.EnsureConfiguredDirectories();
             await RefreshAsync();
             await CheckAutomaticBackupAsync();
@@ -44,17 +46,40 @@ public partial class MainWindow : Window
     }
 
 
-    private async Task CheckLauncherSelfUpdateAsync()
+    private async Task<bool> CheckLauncherSelfUpdateAsync()
     {
         LauncherSelfUpdateButton.Visibility = Visibility.Collapsed;
 
         try
         {
             _launcherRelease = await _launcherSelfUpdateService.GetLatestReleaseAsync();
-            if (_launcherSelfUpdateService.IsUpdateAvailable(_launcherRelease))
+            if (!_launcherSelfUpdateService.IsUpdateAvailable(_launcherRelease))
+                return false;
+
+            LauncherSelfUpdateButton.Content = $"↑  Réessayer Launcher {_launcherRelease!.Version}";
+            LauncherSelfUpdateButton.Visibility = Visibility.Collapsed;
+            LauncherSelfUpdateButton.IsEnabled = false;
+
+            try
             {
-                LauncherSelfUpdateButton.Content = $"↑  Launcher {_launcherRelease!.Version}";
+                SetBusy(true, $"Mise à jour automatique du Launcher {_launcherRelease.Version}…");
+                var progress = new Progress<string>(message => ActivityText.Text = message);
+                await _launcherSelfUpdateService.PrepareAndLaunchUpdateAsync(_launcherRelease, progress);
+
+                ActivityText.Text = $"Launcher {_launcherRelease.Version} vérifié. Redémarrage automatique…";
+                Application.Current.Shutdown();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                // Le Launcher reste utilisable si l'auto-update échoue. Le bouton
+                // devient alors un secours manuel pour réessayer sans bloquer TL.
+                LauncherSelfUpdateButton.Content = $"↑  Réessayer Launcher {_launcherRelease.Version}";
                 LauncherSelfUpdateButton.Visibility = Visibility.Visible;
+                LauncherSelfUpdateButton.IsEnabled = true;
+                SetBusy(false);
+                ActivityText.Text = $"Auto-update Launcher impossible : {ex.Message}";
+                return false;
             }
         }
         catch
@@ -62,22 +87,13 @@ public partial class MainWindow : Window
             // Une panne réseau du canal Launcher ne doit pas empêcher TL de fonctionner.
             _launcherRelease = null;
             LauncherSelfUpdateButton.Visibility = Visibility.Collapsed;
+            return false;
         }
     }
 
     private async void LauncherSelfUpdateButton_Click(object sender, RoutedEventArgs e)
     {
         if (_launcherRelease is null || !_launcherSelfUpdateService.IsUpdateAvailable(_launcherRelease))
-            return;
-
-        var answer = MessageBox.Show(
-            $"Taikeron Launcher {_launcherRelease.Version} est disponible.\n\n" +
-            "Le Launcher va télécharger la release officielle, vérifier son SHA-256, se fermer, remplacer son ancien code puis redémarrer.",
-            "Mettre à jour Taikeron Launcher",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Information);
-
-        if (answer != MessageBoxResult.Yes)
             return;
 
         try
