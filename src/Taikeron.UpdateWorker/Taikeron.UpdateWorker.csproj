@@ -6,7 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>TaikeronUpdateWorker</AssemblyName>
     <RootNamespace>Taikeron.UpdateWorker</RootNamespace>
-    <Version>0.4.1</Version>
+    <Version>0.4.2</Version>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
   </PropertyGroup>
   <ItemGroup>
