@@ -67,6 +67,8 @@ public sealed class TlUpdateWorkerService
             executablePath,
             currentVersion = currentVersion ?? string.Empty,
             targetVersion = release.Version,
+            dataRoot = Path.GetFullPath(_settingsService.Current.DataRoot),
+            vaultRoot = Path.GetFullPath(_settingsService.Current.VaultRoot),
             dataVaultRoot = Path.GetFullPath(_settingsService.Current.DataVaultRoot),
             mapsRoot = Path.GetFullPath(_settingsService.Current.MapsRoot),
             jobDirectory,
@@ -168,6 +170,9 @@ public sealed class TlReplaceResult
     public string? NewAsarSha256 { get; set; }
     public string? InstallerSha256 { get; set; }
     public string? PreservedMapsPath { get; set; }
+    public string? MigratedDataRoot { get; set; }
+    public string? MigratedVaultRoot { get; set; }
+    public string? MigratedMapsRoot { get; set; }
     public string? Error { get; set; }
     public DateTimeOffset CompletedAtUtc { get; set; }
 }
