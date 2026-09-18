@@ -3,6 +3,7 @@ using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Taikeron.Launcher.Models;
+using Taikeron.Shared;
 
 namespace Taikeron.Launcher.Services;
 
@@ -242,6 +243,160 @@ public sealed class TaikeronLabService
         return fullCandidate.StartsWith(fullParent, StringComparison.OrdinalIgnoreCase);
     }
 
+    public async Task<TlUninstallResult> UninstallAsync(
+        string? executablePath,
+        IProgress<string>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        var installDirectory = !string.IsNullOrWhiteSpace(executablePath) && File.Exists(executablePath)
+            ? Path.GetDirectoryName(Path.GetFullPath(executablePath))!
+            : CanonicalInstallDirectory;
+
+        var dataRoot = Path.GetFullPath(_settingsService.Current.DataRoot);
+        var vaultRoot = Path.GetFullPath(_settingsService.Current.VaultRoot);
+        var mapsRoot = Path.GetFullPath(_settingsService.Current.MapsRoot);
+        var backupRoot = string.IsNullOrWhiteSpace(_settingsService.Current.BackupRoot)
+            ? string.Empty
+            : Path.GetFullPath(_settingsService.Current.BackupRoot);
+
+        foreach (var persistent in new[] { dataRoot, vaultRoot, mapsRoot, backupRoot }.Where(path => !string.IsNullOrWhiteSpace(path)))
+        {
+            if (string.Equals(Path.GetFullPath(persistent), Path.GetFullPath(installDirectory), StringComparison.OrdinalIgnoreCase)
+                || IsPathInside(persistent, installDirectory))
+            {
+                throw new InvalidOperationException("Data / Vault / Maps / sauvegardes doivent être extérieurs au dossier d’installation avant désinstallation.");
+            }
+        }
+
+        progress?.Report("Fermeture complète de Taikeron Lab…");
+        await StopTaikeronLabAsync(installDirectory, cancellationToken);
+
+        progress?.Report("Protection des données persistantes…");
+        MergeLegacyDirectoryNoOverwrite(Path.Combine(installDirectory, "data"), dataRoot);
+        MergeLegacyDirectoryNoOverwrite(Path.Combine(installDirectory, "vault"), vaultRoot);
+        MergeLegacyDirectoryNoOverwrite(Path.Combine(installDirectory, "maps"), mapsRoot);
+
+        progress?.Report("Suppression des profils et caches Electron/Chromium…");
+        var cleanup = TlRuntimeCleanup.PurgeVolatileState(
+            new[] { dataRoot, vaultRoot, mapsRoot, backupRoot },
+            message => progress?.Report(message));
+
+        progress?.Report("Suppression du dossier application Taikeron Lab…");
+        if (Directory.Exists(installDirectory))
+            DeleteDirectoryStrict(installDirectory);
+
+        if (Directory.Exists(installDirectory))
+            throw new IOException("Le dossier Taikeron Lab existe encore après la désinstallation.");
+
+        return new TlUninstallResult(
+            true,
+            installDirectory,
+            cleanup.RemovedDirectories.Count,
+            cleanup.RemovedFiles.Count,
+            dataRoot,
+            vaultRoot,
+            mapsRoot);
+    }
+
+    private static async Task StopTaikeronLabAsync(string installDirectory, CancellationToken cancellationToken)
+    {
+        foreach (var process in FindTaikeronProcesses(installDirectory).ToList())
+        {
+            try { process.CloseMainWindow(); } catch { }
+        }
+
+        var deadline = DateTime.UtcNow.AddSeconds(8);
+        while (DateTime.UtcNow < deadline && FindTaikeronProcesses(installDirectory).Any())
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            await Task.Delay(250, cancellationToken);
+        }
+
+        foreach (var process in FindTaikeronProcesses(installDirectory).ToList())
+        {
+            try
+            {
+                process.Kill(entireProcessTree: true);
+                await process.WaitForExitAsync(cancellationToken);
+            }
+            catch { }
+        }
+
+        if (FindTaikeronProcesses(installDirectory).Any())
+            throw new InvalidOperationException("Taikeron Lab est encore actif. Désinstallation refusée.");
+    }
+
+    private static IEnumerable<Process> FindTaikeronProcesses(string installDirectory)
+    {
+        foreach (var process in Process.GetProcesses())
+        {
+            string? executable = null;
+            try { executable = process.MainModule?.FileName; } catch { }
+
+            if (!string.IsNullOrWhiteSpace(executable) && IsPathInside(executable, installDirectory))
+            {
+                yield return process;
+                continue;
+            }
+
+            try
+            {
+                if (string.Equals(process.ProcessName, "Taikeron Lab", StringComparison.OrdinalIgnoreCase))
+                    yield return process;
+            }
+            catch { }
+        }
+    }
+
+    private static void MergeLegacyDirectoryNoOverwrite(string source, string destination)
+    {
+        if (!Directory.Exists(source))
+            return;
+
+        Directory.CreateDirectory(destination);
+
+        foreach (var directory in Directory.EnumerateDirectories(source, "*", SearchOption.AllDirectories))
+            Directory.CreateDirectory(Path.Combine(destination, Path.GetRelativePath(source, directory)));
+
+        foreach (var file in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories))
+        {
+            var target = Path.Combine(destination, Path.GetRelativePath(source, file));
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            if (!File.Exists(target))
+                File.Copy(file, target);
+        }
+    }
+
+    private static void DeleteDirectoryStrict(string directory)
+    {
+        Exception? lastError = null;
+        for (var attempt = 0; attempt < 24; attempt++)
+        {
+            try
+            {
+                if (!Directory.Exists(directory))
+                    return;
+
+                foreach (var file in Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories))
+                {
+                    try { File.SetAttributes(file, FileAttributes.Normal); } catch { }
+                }
+
+                Directory.Delete(directory, true);
+                if (!Directory.Exists(directory))
+                    return;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                lastError = ex;
+            }
+
+            Thread.Sleep(250);
+        }
+
+        throw new IOException("Impossible de supprimer complètement le dossier Taikeron Lab.", lastError);
+    }
+
     public async Task<string> DownloadAndVerifyAsync(
         TlReleaseManifest release,
         IProgress<double>? progress = null,
@@ -332,3 +487,13 @@ public sealed class TaikeronLabService
         return Version.TryParse(clean, out var parsed) ? parsed.ToString() : clean;
     }
 }
+
+
+public sealed record TlUninstallResult(
+    bool Ok,
+    string InstallDirectory,
+    int RemovedRuntimeDirectories,
+    int RemovedRuntimeFiles,
+    string DataRoot,
+    string VaultRoot,
+    string MapsRoot);
