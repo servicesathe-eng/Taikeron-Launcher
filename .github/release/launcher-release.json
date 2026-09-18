@@ -1,7 +1,7 @@
 {
-  "version": "0.4.4",
-  "requestedAtUtc": "2026-09-18T12:25:00Z",
+  "version": "0.4.5",
+  "requestedAtUtc": "2026-09-18T15:45:00Z",
   "channel": "stable",
   "runner": "github-hosted-windows",
-  "reason": "Public release Launcher 0.4.4 with split Data/Vault storage and TL/TMB sidebar selection"
+  "reason": "Public release Launcher 0.4.5 with manual TL refresh and cache-busting update detection"
 }

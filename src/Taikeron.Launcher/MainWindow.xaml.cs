@@ -203,7 +203,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private async Task RefreshAsync()
+    private async Task RefreshAsync(bool forceRemoteRefresh = false)
     {
         if (!string.Equals(_selectedProduct, "TL", StringComparison.OrdinalIgnoreCase))
         {
@@ -224,7 +224,7 @@ public partial class MainWindow : Window
 
             InstalledVersionText.Text = _installedVersion ?? "Non installé";
 
-            _stableRelease = await _labService.GetStableReleaseAsync();
+            _stableRelease = await _labService.GetStableReleaseAsync(forceRemoteRefresh);
             LatestVersionText.Text = string.IsNullOrWhiteSpace(_stableRelease?.Version) ? "—" : _stableRelease.Version;
             VersionCardValue.Text = LatestVersionText.Text;
             DownloadSizeText.Text = _stableRelease is null ? "Taille : —" : $"Taille : {FormatBytes(_stableRelease.Bytes)}";
@@ -544,10 +544,25 @@ public partial class MainWindow : Window
 
     private async void RefreshButton_Click(object sender, RoutedEventArgs e)
     {
-        if (string.Equals(_selectedProduct, "TL", StringComparison.OrdinalIgnoreCase))
-            await RefreshAsync();
-        else
+        if (!string.Equals(_selectedProduct, "TL", StringComparison.OrdinalIgnoreCase))
+        {
             ApplyTmbPanel();
+            return;
+        }
+
+        RefreshButton.IsEnabled = false;
+        var previousContent = RefreshButton.Content;
+        RefreshButton.Content = "↻  Actualisation…";
+
+        try
+        {
+            await RefreshAsync(forceRemoteRefresh: true);
+        }
+        finally
+        {
+            RefreshButton.Content = previousContent;
+            RefreshButton.IsEnabled = true;
+        }
     }
 
     private async void RepairButton_Click(object sender, RoutedEventArgs e)

@@ -87,9 +87,32 @@ public sealed class TaikeronLabService
         }
     }
 
-    public async Task<TlReleaseManifest?> GetStableReleaseAsync(CancellationToken cancellationToken = default)
+    public Task<TlReleaseManifest?> GetStableReleaseAsync(CancellationToken cancellationToken = default) =>
+        GetStableReleaseAsync(forceRefresh: false, cancellationToken);
+
+    public async Task<TlReleaseManifest?> GetStableReleaseAsync(
+        bool forceRefresh,
+        CancellationToken cancellationToken = default)
     {
-        using var response = await _httpClient.GetAsync(StableManifestUrl, cancellationToken);
+        var requestUrl = forceRefresh
+            ? $"{StableManifestUrl}?refresh={DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}"
+            : StableManifestUrl;
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, requestUrl);
+        if (forceRefresh)
+        {
+            request.Headers.CacheControl = new System.Net.Http.Headers.CacheControlHeaderValue
+            {
+                NoCache = true,
+                NoStore = true
+            };
+            request.Headers.Pragma.ParseAdd("no-cache");
+        }
+
+        using var response = await _httpClient.SendAsync(
+            request,
+            HttpCompletionOption.ResponseHeadersRead,
+            cancellationToken);
         response.EnsureSuccessStatusCode();
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
 

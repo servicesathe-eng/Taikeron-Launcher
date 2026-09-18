@@ -30,7 +30,7 @@
 
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                     <Button Content="⌂  Accueil" Style="{StaticResource ActionButton}" BorderBrush="{StaticResource Gold}" Margin="0,0,8,0" Padding="15,8"/>
-                    <Button Content="↓  Mises à jour  •1" Style="{StaticResource ActionButton}" Margin="0,0,8,0" Padding="15,8" Click="RefreshButton_Click"/>
+                    <Button x:Name="RefreshButton" Content="↻  Actualiser" Style="{StaticResource ActionButton}" Margin="0,0,8,0" Padding="15,8" Click="RefreshButton_Click"/>
                     <Button Content="⌕  Réparation" Style="{StaticResource ActionButton}" Margin="0,0,8,0" Padding="15,8" Click="RepairButton_Click"/>
                     <Button Content="⚙  Paramètres" Style="{StaticResource ActionButton}" Padding="15,8" Click="SettingsButton_Click"/>
                 </StackPanel>
