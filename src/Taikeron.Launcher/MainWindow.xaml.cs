@@ -93,8 +93,9 @@ public partial class MainWindow : Window
         ProductHeroDescriptionText.Text = "Le Launcher installe, vérifie, répare et met à jour TL.";
         ProductBullet1Text.Text = "• Distribution centralisée par le Launcher";
         ProductBullet2Text.Text = "• Vérification taille + SHA-256";
-        ProductBullet3Text.Text = "• Remplacement complet du code, Data/Vault protégés";
+        ProductBullet3Text.Text = "• Remplacement intégral runtime + caches, Data/Vault/Maps protégés";
         RepairActionButton.IsEnabled = true;
+        UninstallButton.IsEnabled = true;
     }
 
     private void ApplyTmbPanel()
@@ -123,6 +124,7 @@ public partial class MainWindow : Window
         UpdateButton.Content = "↓  Mettre à jour TMB";
         UpdateButton.IsEnabled = false;
         RepairActionButton.IsEnabled = false;
+        UninstallButton.IsEnabled = false;
         ShaStatusText.Text = "Gestion TMB non activée";
         FooterInstallStateText.Text = "◉  TMB sélectionné";
         ActivityText.Text = "TMB est sélectionné dans le Launcher.";
@@ -301,6 +303,7 @@ public partial class MainWindow : Window
         UpdateBadge.Visibility = updateAvailable ? Visibility.Visible : Visibility.Collapsed;
         UpdateBadgeText.Text = updateAvailable ? "Mise à jour disponible" : "";
         ApplyLaunchButtonState(updateAvailable);
+        UninstallButton.IsEnabled = true;
 
         if (_installedExecutable is null || _integrityResult?.State == TlIntegrityState.NotInstalled)
         {
@@ -542,6 +545,65 @@ public partial class MainWindow : Window
         }
     }
 
+    private async void UninstallButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (!string.Equals(_selectedProduct, "TL", StringComparison.OrdinalIgnoreCase))
+            return;
+
+        var installedLabel = _installedExecutable is null
+            ? "Aucune installation TL active n’est détectée. Le Launcher peut néanmoins nettoyer les restes runtime."
+            : $"Installation détectée :\n{_installedExecutable}";
+
+        var confirm = MessageBox.Show(
+            $"{installedLabel}\n\n" +
+            "Cette opération supprime complètement le code Taikeron Lab, les profils Electron/Chromium, caches GPU/Code Cache, IndexedDB/localStorage/sessionStorage, crash dumps et paquets TL temporaires.\n\n" +
+            "Data, Vault, Maps et les sauvegardes configurées sont conservés.\n\n" +
+            "Continuer ?",
+            "Désinstaller complètement Taikeron Lab",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+
+        if (confirm != MessageBoxResult.Yes)
+            return;
+
+        try
+        {
+            SetBusy(true, "Désinstallation complète du runtime Taikeron Lab…");
+            var progress = new Progress<string>(message => ActivityText.Text = message);
+            var result = await _labService.UninstallAsync(_installedExecutable, progress);
+
+            _installedExecutable = null;
+            _installedVersion = null;
+            _integrityResult = null;
+
+            await RefreshAsync(forceRemoteRefresh: true);
+
+            MessageBox.Show(
+                "Taikeron Lab a été désinstallé complètement.\n\n" +
+                $"Profils/caches runtime supprimés : {result.RemovedRuntimeDirectories}\n" +
+                $"Fichiers runtime supprimés : {result.RemovedRuntimeFiles}\n\n" +
+                $"Data conservées : {result.DataRoot}\n" +
+                $"Vault conservé : {result.VaultRoot}\n" +
+                $"Maps conservées : {result.MapsRoot}",
+                "Désinstallation TL terminée",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            ActivityText.Text = $"Échec de désinstallation : {ex.Message}";
+            MessageBox.Show(
+                ex.Message,
+                "Échec de désinstallation TL",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+        finally
+        {
+            SetBusy(false);
+        }
+    }
+
     private async void RefreshButton_Click(object sender, RoutedEventArgs e)
     {
         if (!string.Equals(_selectedProduct, "TL", StringComparison.OrdinalIgnoreCase))
@@ -653,15 +715,20 @@ public partial class MainWindow : Window
             LaunchButton.IsEnabled = false;
             UpdateButton.IsEnabled = false;
             RepairActionButton.IsEnabled = false;
+            UninstallButton.IsEnabled = false;
         }
         else if (busy)
         {
+            LaunchButton.IsEnabled = false;
             UpdateButton.IsEnabled = false;
+            RepairActionButton.IsEnabled = false;
+            UninstallButton.IsEnabled = false;
         }
         else
         {
             UpdateButton.IsEnabled = _stableRelease is not null;
             RepairActionButton.IsEnabled = true;
+            UninstallButton.IsEnabled = true;
             ApplyLaunchButtonState(_labService.IsUpdateAvailable(_installedVersion, _stableRelease?.Version));
         }
 
