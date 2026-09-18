@@ -24,6 +24,7 @@ internal static class ProgramV2
         string? resultFile = null;
         string? preservedMapsPath = null;
         string? migratedDataRoot = null;
+        string? migratedVaultRoot = null;
         string? migratedMapsRoot = null;
         var oldCodeRemoved = false;
 
@@ -65,12 +66,18 @@ internal static class ProgramV2
             var executablePath = Path.GetFullPath(request.ExecutablePath);
             ValidateInstallTarget(installDirectory, executablePath);
 
-            var dataVaultRoot = Path.GetFullPath(request.DataVaultRoot)
+            var dataRoot = Path.GetFullPath(request.DataRoot)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            var vaultRoot = Path.GetFullPath(request.VaultRoot)
                 .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
             var mapsRoot = Path.GetFullPath(request.MapsRoot)
                 .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-            ValidatePersistentTarget(dataVaultRoot, installDirectory, "Data Vault");
+            ValidatePersistentTarget(dataRoot, installDirectory, "Data");
+            ValidatePersistentTarget(vaultRoot, installDirectory, "Vault");
             ValidatePersistentTarget(mapsRoot, installDirectory, "Maps");
+
+            if (string.Equals(dataRoot, vaultRoot, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Data et Vault doivent être deux dossiers distincts.");
 
             var oldAsar = Path.Combine(installDirectory, "resources", "app.asar");
             var oldAsarSha = File.Exists(oldAsar) ? await ComputeSha256Async(oldAsar) : null;
@@ -80,9 +87,16 @@ internal static class ProgramV2
             await StopTaikeronLabAsync(installDirectory);
 
             WriteStatus(statusFile, "preserving-data", "Migration des données persistantes hors du dossier application.");
-            migratedDataRoot = MigrateLegacyPersistentData(
+            migratedDataRoot = MigrateLegacyPersistentDirectory(
                 installDirectory,
-                dataVaultRoot,
+                "data",
+                dataRoot,
+                jobDirectory);
+
+            migratedVaultRoot = MigrateLegacyPersistentDirectory(
+                installDirectory,
+                "vault",
+                vaultRoot,
                 jobDirectory);
 
             migratedMapsRoot = MigrateLegacyMaps(
@@ -182,6 +196,7 @@ internal static class ProgramV2
                 NewAsarSha256 = newAsarSha,
                 InstallerSha256 = installerSha,
                 MigratedDataRoot = migratedDataRoot,
+                MigratedVaultRoot = migratedVaultRoot,
                 MigratedMapsRoot = migratedMapsRoot,
                 CompletedAtUtc = DateTimeOffset.UtcNow
             });
@@ -228,8 +243,10 @@ internal static class ProgramV2
             throw new InvalidDataException("Paquet TL ou SHA-256 absent de la requête.");
         if (string.IsNullOrWhiteSpace(request.InstallDirectory) || string.IsNullOrWhiteSpace(request.ExecutablePath))
             throw new InvalidDataException("Cible d’installation TL absente de la requête.");
-        if (string.IsNullOrWhiteSpace(request.DataVaultRoot) || string.IsNullOrWhiteSpace(request.MapsRoot))
-            throw new InvalidDataException("Emplacements persistants Data Vault / Maps absents de la requête.");
+        if (string.IsNullOrWhiteSpace(request.DataRoot) ||
+            string.IsNullOrWhiteSpace(request.VaultRoot) ||
+            string.IsNullOrWhiteSpace(request.MapsRoot))
+            throw new InvalidDataException("Emplacements persistants Data / Vault / Maps absents de la requête.");
         if (string.IsNullOrWhiteSpace(request.ResultFile) || string.IsNullOrWhiteSpace(request.StatusFile) || string.IsNullOrWhiteSpace(request.JobDirectory))
             throw new InvalidDataException("Fichiers de suivi worker absents de la requête.");
     }
@@ -294,38 +311,31 @@ internal static class ProgramV2
         Directory.CreateDirectory(persistentRoot);
     }
 
-    private static string? MigrateLegacyPersistentData(
+    private static string? MigrateLegacyPersistentDirectory(
         string installDirectory,
-        string dataVaultRoot,
+        string legacyName,
+        string destination,
         string jobDirectory)
     {
-        var migratedAny = false;
-        foreach (var name in new[] { "data", "vault" })
+        var source = Path.Combine(installDirectory, legacyName);
+        if (!Directory.Exists(source))
+            return null;
+
+        if (!Directory.Exists(destination) || !Directory.EnumerateFileSystemEntries(destination).Any())
         {
-            var source = Path.Combine(installDirectory, name);
-            if (!Directory.Exists(source))
-                continue;
-
-            var destination = Path.Combine(dataVaultRoot, name);
-            if (!Directory.Exists(destination) || !Directory.EnumerateFileSystemEntries(destination).Any())
-            {
-                if (Directory.Exists(destination))
-                    Directory.Delete(destination, true);
-                MoveOrCopyDirectory(source, destination);
-                migratedAny = true;
-                continue;
-            }
-
-            // Un Data Vault déjà peuplé reste la référence. On conserve l’ancien
-            // dossier sans l’écraser, afin qu’aucune donnée ne soit perdue.
-            var preserved = Path.Combine(jobDirectory, "legacy-persistent-data", name);
-            if (Directory.Exists(preserved))
-                Directory.Delete(preserved, true);
-            MoveOrCopyDirectory(source, preserved);
-            migratedAny = true;
+            if (Directory.Exists(destination))
+                Directory.Delete(destination, true);
+            MoveOrCopyDirectory(source, destination);
+            return destination;
         }
 
-        return migratedAny ? dataVaultRoot : null;
+        // The configured persistent root remains authoritative. Preserve the
+        // legacy copy in the job directory rather than overwriting user data.
+        var preserved = Path.Combine(jobDirectory, "legacy-persistent-data", legacyName);
+        if (Directory.Exists(preserved))
+            Directory.Delete(preserved, true);
+        MoveOrCopyDirectory(source, preserved);
+        return destination;
     }
 
     private static string? MigrateLegacyMaps(
@@ -556,6 +566,8 @@ internal sealed class ReplaceRequest
     public string ExecutablePath { get; set; } = string.Empty;
     public string CurrentVersion { get; set; } = string.Empty;
     public string TargetVersion { get; set; } = string.Empty;
+    public string DataRoot { get; set; } = string.Empty;
+    public string VaultRoot { get; set; } = string.Empty;
     public string DataVaultRoot { get; set; } = string.Empty;
     public string MapsRoot { get; set; } = string.Empty;
     public string JobDirectory { get; set; } = string.Empty;
@@ -576,6 +588,7 @@ internal sealed class ReplaceResult
     public string? InstallerSha256 { get; set; }
     public string? PreservedMapsPath { get; set; }
     public string? MigratedDataRoot { get; set; }
+    public string? MigratedVaultRoot { get; set; }
     public string? MigratedMapsRoot { get; set; }
     public string? Error { get; set; }
     public DateTimeOffset CompletedAtUtc { get; set; }
