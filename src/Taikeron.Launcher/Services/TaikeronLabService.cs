@@ -138,7 +138,12 @@ public sealed class TaikeronLabService
             UseShellExecute = false,
             WorkingDirectory = Path.GetDirectoryName(executablePath)!
         };
+        // TL <= 2.302.6.4 interprets TAIKERON_DATA_ROOT as a common storage
+        // parent and appends data/vault itself. Keep that compatibility contract
+        // while also exposing the canonical split roots for newer TL builds.
         startInfo.Environment["TAIKERON_DATA_ROOT"] = _settingsService.Current.DataVaultRoot;
+        startInfo.Environment["TAIKERON_DATA_DIR"] = _settingsService.Current.DataRoot;
+        startInfo.Environment["TAIKERON_VAULT_ROOT"] = _settingsService.Current.VaultRoot;
         startInfo.Environment["TAIKERON_MAPS_ROOT"] = _settingsService.Current.MapsRoot;
 
         Process.Start(startInfo);
@@ -146,35 +151,47 @@ public sealed class TaikeronLabService
 
     private void EnsureConfiguredDataAvailable(string executablePath)
     {
-        var dataRoot = Path.GetFullPath(_settingsService.Current.DataVaultRoot)
+        var dataRoot = Path.GetFullPath(_settingsService.Current.DataRoot)
             .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        if (string.IsNullOrWhiteSpace(dataRoot))
-            throw new InvalidOperationException("Le Data Vault n’est pas configuré.");
+        var vaultRoot = Path.GetFullPath(_settingsService.Current.VaultRoot)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+        if (string.IsNullOrWhiteSpace(dataRoot) || string.IsNullOrWhiteSpace(vaultRoot))
+            throw new InvalidOperationException("Data ou Vault n’est pas configuré.");
 
         var installDirectory = Path.GetDirectoryName(Path.GetFullPath(executablePath))!;
-        if (string.Equals(dataRoot, installDirectory, StringComparison.OrdinalIgnoreCase)
-            || IsPathInside(dataRoot, installDirectory))
+        foreach (var persistent in new[] { dataRoot, vaultRoot })
         {
-            throw new InvalidOperationException("Le Data Vault doit être séparé du dossier d’installation de Taikeron Lab.");
+            if (string.Equals(persistent, installDirectory, StringComparison.OrdinalIgnoreCase)
+                || IsPathInside(persistent, installDirectory))
+            {
+                throw new InvalidOperationException("Data et Vault doivent être séparés du dossier d’installation de Taikeron Lab.");
+            }
         }
 
         Directory.CreateDirectory(dataRoot);
+        Directory.CreateDirectory(vaultRoot);
 
-        foreach (var name in new[] { "data", "vault" })
-        {
-            var destination = Path.Combine(dataRoot, name);
-            if (Directory.Exists(destination) && Directory.EnumerateFileSystemEntries(destination).Any())
-                continue;
+        CopyLegacyDirectoryIfDestinationEmpty(
+            Path.Combine(installDirectory, "data"),
+            dataRoot);
+        CopyLegacyDirectoryIfDestinationEmpty(
+            Path.Combine(installDirectory, "vault"),
+            vaultRoot);
+    }
 
-            var source = Path.Combine(installDirectory, name);
-            if (!Directory.Exists(source))
-                continue;
+    private static void CopyLegacyDirectoryIfDestinationEmpty(string source, string destination)
+    {
+        if (!Directory.Exists(source))
+            return;
 
-            if (Directory.Exists(destination))
-                Directory.Delete(destination, true);
+        if (Directory.Exists(destination) && Directory.EnumerateFileSystemEntries(destination).Any())
+            return;
 
-            CopyDirectory(source, destination);
-        }
+        if (Directory.Exists(destination))
+            Directory.Delete(destination, true);
+
+        CopyDirectory(source, destination);
     }
 
     private static void CopyDirectory(string source, string destination)
