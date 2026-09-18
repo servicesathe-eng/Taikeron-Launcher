@@ -3,7 +3,15 @@ namespace Taikeron.Launcher.Models;
 public sealed class LauncherSettings
 {
     public string AppsRoot { get; set; } = string.Empty;
+
+    // Canonical 0.4.4+ persistent roots.
+    public string DataRoot { get; set; } = string.Empty;
+    public string VaultRoot { get; set; } = string.Empty;
+
+    // Backward-compatibility root used by TL <= 2.302.6.4. It is the common
+    // parent of Data and Vault, never the canonical storage destination itself.
     public string DataVaultRoot { get; set; } = string.Empty;
+
     public string MapsRoot { get; set; } = string.Empty;
     public string DownloadsRoot { get; set; } = string.Empty;
     public string BackupRoot { get; set; } = string.Empty;
@@ -23,12 +31,13 @@ public sealed class LauncherSettings
     {
         var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         var taikeron = Path.Combine(local, "Taikeron");
-        var vault = Path.Combine(taikeron, "DataVault");
 
         return new LauncherSettings
         {
             AppsRoot = Path.Combine(taikeron, "Apps"),
-            DataVaultRoot = vault,
+            DataRoot = Path.Combine(taikeron, "Data"),
+            VaultRoot = Path.Combine(taikeron, "Vault"),
+            DataVaultRoot = taikeron,
             MapsRoot = Path.Combine(taikeron, "Maps"),
             DownloadsRoot = Path.Combine(taikeron, "Launcher", "Downloads"),
             BackupRoot = string.Empty,
