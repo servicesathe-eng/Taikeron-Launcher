@@ -88,7 +88,7 @@ jobs:
             }
           }
 
-      - name: Create public release package
+      - name: Create self-update package
         shell: powershell
         run: |
           $zip = 'artifacts/Taikeron-Launcher-win-x64.zip'
@@ -96,7 +96,38 @@ jobs:
           Compress-Archive -Path 'artifacts/TaikeronLauncher/*' -DestinationPath $zip -CompressionLevel Optimal
           $sha = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
           "$sha  Taikeron-Launcher-win-x64.zip" | Set-Content -Encoding ascii 'artifacts/Taikeron-Launcher-win-x64.sha256.txt'
-          Write-Host "Launcher SHA-256: $sha"
+          Write-Host "Launcher self-update SHA-256: $sha"
+
+      - name: Install Inno Setup
+        shell: powershell
+        run: |
+          $iscc = Get-Command ISCC.exe -ErrorAction SilentlyContinue
+          if (-not $iscc) {
+            choco install innosetup --no-progress -y
+          }
+          $candidate = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path -LiteralPath $candidate -PathType Leaf)) {
+            $cmd = Get-Command ISCC.exe -ErrorAction SilentlyContinue
+            if (-not $cmd) { throw 'Inno Setup ISCC.exe introuvable' }
+            $candidate = $cmd.Source
+          }
+          "INNO_ISCC=$candidate" >> $env:GITHUB_ENV
+
+      - name: Build Windows installer
+        shell: powershell
+        run: |
+          $buildRoot = (Resolve-Path 'artifacts/TaikeronLauncher').Path
+          $outputDir = (Resolve-Path 'artifacts').Path
+          & "$env:INNO_ISCC" "/DMyAppVersion=${{ steps.version.outputs.version }}" "/DBuildRoot=$buildRoot" "/DOutputDir=$outputDir" "installer/TaikeronLauncher.iss"
+          if ($LASTEXITCODE -ne 0) { throw 'Build installateur Launcher échoué' }
+
+          $setup = 'artifacts/Taikeron-Launcher-Setup-x64.exe'
+          if (-not (Test-Path -LiteralPath $setup -PathType Leaf)) {
+            throw 'Installateur Taikeron Launcher absent'
+          }
+          $setupSha = (Get-FileHash -LiteralPath $setup -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$setupSha  Taikeron-Launcher-Setup-x64.exe" | Set-Content -Encoding ascii 'artifacts/Taikeron-Launcher-Setup-x64.sha256.txt'
+          Write-Host "Launcher installer SHA-256: $setupSha"
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
@@ -105,6 +136,8 @@ jobs:
           path: |
             artifacts/Taikeron-Launcher-win-x64.zip
             artifacts/Taikeron-Launcher-win-x64.sha256.txt
+            artifacts/Taikeron-Launcher-Setup-x64.exe
+            artifacts/Taikeron-Launcher-Setup-x64.sha256.txt
           if-no-files-found: error
 
       - name: Publish GitHub release
@@ -120,14 +153,16 @@ jobs:
           $title = "Taikeron Launcher $env:RELEASE_VERSION"
           $zip = 'artifacts/Taikeron-Launcher-win-x64.zip'
           $sha = 'artifacts/Taikeron-Launcher-win-x64.sha256.txt'
+          $setup = 'artifacts/Taikeron-Launcher-Setup-x64.exe'
+          $setupSha = 'artifacts/Taikeron-Launcher-Setup-x64.sha256.txt'
 
           cmd /c "gh release view $tag --repo $repo >nul 2>nul"
           $releaseExists = ($LASTEXITCODE -eq 0)
 
           if ($releaseExists) {
-            gh release upload $tag $zip $sha --repo $repo --clobber
+            gh release upload $tag $zip $sha $setup $setupSha --repo $repo --clobber
           } else {
-            gh release create $tag $zip $sha --repo $repo --title $title --notes "Taikeron Launcher $env:RELEASE_VERSION · Windows x64" --latest
+            gh release create $tag $zip $sha $setup $setupSha --repo $repo --title $title --notes "Taikeron Launcher $env:RELEASE_VERSION · Windows x64" --latest
           }
 
           if ($LASTEXITCODE -ne 0) { throw 'Publication de la release Launcher échouée' }
