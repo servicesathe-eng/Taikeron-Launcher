@@ -22,7 +22,8 @@ public partial class StorageSettingsWindow : Window
     {
         var settings = _settingsService.Current;
         AppsRootBox.Text = settings.AppsRoot;
-        VaultRootBox.Text = settings.DataVaultRoot;
+        DataRootBox.Text = settings.DataRoot;
+        VaultRootBox.Text = settings.VaultRoot;
         MapsRootBox.Text = settings.MapsRoot;
         DownloadsRootBox.Text = settings.DownloadsRoot;
         BackupRootBox.Text = settings.BackupRoot;
@@ -44,7 +45,8 @@ public partial class StorageSettingsWindow : Window
     }
 
     private void BrowseApps_Click(object sender, RoutedEventArgs e) => BrowseInto(AppsRootBox, "Dossier des applications Taikeron");
-    private void BrowseVault_Click(object sender, RoutedEventArgs e) => BrowseInto(VaultRootBox, "Dossier du Data Vault");
+    private void BrowseData_Click(object sender, RoutedEventArgs e) => BrowseInto(DataRootBox, "Dossier Data Taikeron");
+    private void BrowseVault_Click(object sender, RoutedEventArgs e) => BrowseInto(VaultRootBox, "Dossier Vault Taikeron");
     private void BrowseMaps_Click(object sender, RoutedEventArgs e) => BrowseInto(MapsRootBox, "Dossier des cartes Taikeron");
     private void BrowseDownloads_Click(object sender, RoutedEventArgs e) => BrowseInto(DownloadsRootBox, "Dossier des téléchargements temporaires");
     private void BrowseBackup_Click(object sender, RoutedEventArgs e)
@@ -116,7 +118,7 @@ public partial class StorageSettingsWindow : Window
                 BackupProgressText.Text = result.SnapshotPath ?? result.Message;
                 MessageBox.Show(
                     $"Sauvegarde terminée et vérifiée.\n\n{result.FileCount} fichiers\n{FormatBytes(result.TotalBytes)}\n\n{result.SnapshotPath}",
-                    "Data Vault sauvegardé",
+                    "Data + Vault sauvegardés",
                     MessageBoxButton.OK,
                     MessageBoxImage.Information);
             }
@@ -152,6 +154,7 @@ public partial class StorageSettingsWindow : Window
                 throw new InvalidOperationException("Le nombre de sauvegardes à conserver doit être supérieur ou égal à 1.");
 
             var apps = LauncherSettingsService.NormalizePath(AppsRootBox.Text);
+            var data = LauncherSettingsService.NormalizePath(DataRootBox.Text);
             var vault = LauncherSettingsService.NormalizePath(VaultRootBox.Text);
             var maps = LauncherSettingsService.NormalizePath(MapsRootBox.Text);
             var downloads = LauncherSettingsService.NormalizePath(DownloadsRootBox.Text);
@@ -159,8 +162,13 @@ public partial class StorageSettingsWindow : Window
                 ? string.Empty
                 : LauncherSettingsService.NormalizePath(BackupRootBox.Text);
 
-            if (string.IsNullOrWhiteSpace(apps) || string.IsNullOrWhiteSpace(vault) || string.IsNullOrWhiteSpace(maps) || string.IsNullOrWhiteSpace(downloads))
-                throw new InvalidOperationException("Les emplacements Applications, Data Vault, Cartes et Téléchargements sont obligatoires.");
+            if (string.IsNullOrWhiteSpace(apps) || string.IsNullOrWhiteSpace(data) || string.IsNullOrWhiteSpace(vault) || string.IsNullOrWhiteSpace(maps) || string.IsNullOrWhiteSpace(downloads))
+                throw new InvalidOperationException("Les emplacements Applications, Data, Vault, Cartes et Téléchargements sont obligatoires.");
+
+            if (string.Equals(data, vault, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Data et Vault doivent être deux dossiers distincts.");
+
+            var storageRoot = LauncherSettingsService.GetCommonStorageRoot(data, vault);
 
             if (AutomaticBackupCheck.IsChecked == true && string.IsNullOrWhiteSpace(backup))
                 throw new InvalidOperationException("Choisis une destination avant d’activer la sauvegarde automatique.");
@@ -169,7 +177,9 @@ public partial class StorageSettingsWindow : Window
             return new LauncherSettings
             {
                 AppsRoot = apps,
-                DataVaultRoot = vault,
+                DataRoot = data,
+                VaultRoot = vault,
+                DataVaultRoot = storageRoot,
                 MapsRoot = maps,
                 DownloadsRoot = downloads,
                 BackupRoot = backup,
