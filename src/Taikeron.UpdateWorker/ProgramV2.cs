@@ -73,9 +73,14 @@ internal static class ProgramV2
                 .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
             var mapsRoot = Path.GetFullPath(request.MapsRoot)
                 .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            var backupRoot = string.IsNullOrWhiteSpace(request.BackupRoot)
+                ? string.Empty
+                : Path.GetFullPath(request.BackupRoot).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
             ValidatePersistentTarget(dataRoot, installDirectory, "Data");
             ValidatePersistentTarget(vaultRoot, installDirectory, "Vault");
             ValidatePersistentTarget(mapsRoot, installDirectory, "Maps");
+            if (!string.IsNullOrWhiteSpace(backupRoot))
+                ValidatePersistentTarget(backupRoot, installDirectory, "Backup");
 
             if (string.Equals(dataRoot, vaultRoot, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException("Data et Vault doivent être deux dossiers distincts.");
@@ -108,7 +113,7 @@ internal static class ProgramV2
 
             WriteStatus(statusFile, "purging-runtime", "Suppression complète des profils et caches Electron/Chromium de TL.");
             var runtimeCleanup = TlRuntimeCleanup.PurgeVolatileState(
-                new[] { dataRoot, vaultRoot, mapsRoot },
+                new[] { dataRoot, vaultRoot, mapsRoot, backupRoot },
                 message => WriteStatus(statusFile, "purging-runtime", message));
 
             if (Directory.Exists(installDirectory))
@@ -576,6 +581,7 @@ internal sealed class ReplaceRequest
     public string VaultRoot { get; set; } = string.Empty;
     public string DataVaultRoot { get; set; } = string.Empty;
     public string MapsRoot { get; set; } = string.Empty;
+    public string BackupRoot { get; set; } = string.Empty;
     public string JobDirectory { get; set; } = string.Empty;
     public string StatusFile { get; set; } = string.Empty;
     public string ResultFile { get; set; } = string.Empty;
