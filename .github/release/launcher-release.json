@@ -1,7 +1,7 @@
 {
   "version": "0.4.6",
-  "requestedAtUtc": "2026-09-18T17:15:00Z",
+  "requestedAtUtc": "2026-09-18T17:29:00Z",
   "channel": "stable",
   "runner": "github-hosted-windows",
-  "reason": "Public release Launcher 0.4.6: full TL runtime replacement on update, Electron/Chromium cleanup, complete TL uninstall preserving Data/Vault/Maps"
+  "reason": "Launcher 0.4.6: atomic full TL runtime replacement on update, Electron/Chromium cache purge, single-instance protection, complete TL uninstall preserving Data/Vault/Maps/Backup"
 }
