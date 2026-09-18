@@ -15,4 +15,7 @@
     <Using Include="System.IO" />
     <Using Include="System.Net.Http" />
   </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\Taikeron.Shared\TlRuntimeCleanup.cs" Link="Services\TlRuntimeCleanup.cs" />
+  </ItemGroup>
 </Project>
