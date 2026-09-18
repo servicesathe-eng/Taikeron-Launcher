@@ -47,20 +47,21 @@ public sealed class VaultBackupService
     {
         settings.LastBackupAttemptUtc = DateTimeOffset.UtcNow;
 
-        if (!Directory.Exists(settings.DataVaultRoot))
-            return BackupResult.Fail("Data Vault introuvable.");
+        if (!Directory.Exists(settings.DataRoot) && !Directory.Exists(settings.VaultRoot))
+            return BackupResult.Fail("Data et Vault sont introuvables.");
 
         var targetState = GetTargetState(settings);
         if (!targetState.Available)
             return BackupResult.Fail($"Sauvegarde en attente — {targetState.Message}");
 
-        var vault = Path.GetFullPath(settings.DataVaultRoot).TrimEnd(Path.DirectorySeparatorChar);
+        var dataRoot = Path.GetFullPath(settings.DataRoot).TrimEnd(Path.DirectorySeparatorChar);
+        var vaultRoot = Path.GetFullPath(settings.VaultRoot).TrimEnd(Path.DirectorySeparatorChar);
         var backupRoot = Path.GetFullPath(settings.BackupRoot).TrimEnd(Path.DirectorySeparatorChar);
 
-        if (IsSameOrNested(backupRoot, vault) || IsSameOrNested(vault, backupRoot))
-            return BackupResult.Fail("Le dossier de sauvegarde doit être sur un emplacement distinct du Data Vault.");
+        if (Overlaps(backupRoot, dataRoot) || Overlaps(backupRoot, vaultRoot))
+            return BackupResult.Fail("Le dossier de sauvegarde doit être distinct de Data et Vault.");
 
-        var snapshotsRoot = Path.Combine(backupRoot, "DataVault");
+        var snapshotsRoot = Path.Combine(backupRoot, "TaikeronPersistent");
         Directory.CreateDirectory(snapshotsRoot);
 
         var snapshotName = DateTime.Now.ToString("yyyy-MM-dd_HHmmss");
@@ -69,14 +70,18 @@ public sealed class VaultBackupService
 
         try
         {
-            var mapsRoot = string.IsNullOrWhiteSpace(settings.MapsRoot)
-                ? string.Empty
-                : Path.GetFullPath(settings.MapsRoot).TrimEnd(Path.DirectorySeparatorChar);
+            var sources = new List<(string Label, string Root)>();
+            if (Directory.Exists(dataRoot))
+                sources.Add(("Data", dataRoot));
+            if (Directory.Exists(vaultRoot))
+                sources.Add(("Vault", vaultRoot));
 
-            var files = Directory.EnumerateFiles(vault, "*", SearchOption.AllDirectories)
-                .Where(path => string.IsNullOrWhiteSpace(mapsRoot) || !IsSameOrNested(Path.GetFullPath(path), mapsRoot))
+            var files = sources
+                .SelectMany(source => Directory.EnumerateFiles(source.Root, "*", SearchOption.AllDirectories)
+                    .Select(path => (source.Label, source.Root, Path: path)))
                 .ToList();
-            var totalBytes = files.Sum(path => new FileInfo(path).Length);
+
+            var totalBytes = files.Sum(item => new FileInfo(item.Path).Length);
             long copiedBytes = 0;
             var manifestEntries = new List<BackupManifestEntry>(files.Count);
 
@@ -84,14 +89,15 @@ public sealed class VaultBackupService
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                var source = files[index];
-                var relative = Path.GetRelativePath(vault, source);
+                var item = files[index];
+                var relativeWithinRoot = Path.GetRelativePath(item.Root, item.Path);
+                var relative = Path.Combine(item.Label, relativeWithinRoot);
                 var destination = Path.Combine(snapshotPath, relative);
                 Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
 
-                File.Copy(source, destination, overwrite: true);
+                File.Copy(item.Path, destination, overwrite: true);
 
-                var sourceInfo = new FileInfo(source);
+                var sourceInfo = new FileInfo(item.Path);
                 var destinationInfo = new FileInfo(destination);
                 if (sourceInfo.Length != destinationInfo.Length)
                     throw new IOException($"Taille différente après copie : {relative}");
@@ -99,7 +105,7 @@ public sealed class VaultBackupService
                 string? sha256 = null;
                 if (settings.VerifyBackupHashes)
                 {
-                    var sourceHash = await ComputeSha256Async(source, cancellationToken);
+                    var sourceHash = await ComputeSha256Async(item.Path, cancellationToken);
                     var destinationHash = await ComputeSha256Async(destination, cancellationToken);
                     if (!string.Equals(sourceHash, destinationHash, StringComparison.OrdinalIgnoreCase))
                         throw new InvalidDataException($"Vérification SHA-256 échouée : {relative}");
@@ -107,7 +113,10 @@ public sealed class VaultBackupService
                 }
 
                 copiedBytes += sourceInfo.Length;
-                manifestEntries.Add(new BackupManifestEntry(relative, sourceInfo.Length, sha256));
+                manifestEntries.Add(new BackupManifestEntry(
+                    relative.Replace('\\', '/'),
+                    sourceInfo.Length,
+                    sha256));
                 progress?.Report(new BackupProgress(
                     index + 1,
                     files.Count,
@@ -118,7 +127,8 @@ public sealed class VaultBackupService
 
             var manifest = new BackupManifest(
                 DateTimeOffset.UtcNow,
-                vault,
+                dataRoot,
+                vaultRoot,
                 files.Count,
                 totalBytes,
                 settings.VerifyBackupHashes,
@@ -130,7 +140,7 @@ public sealed class VaultBackupService
             ApplyRetention(snapshotsRoot, settings.BackupRetentionCount, snapshotPath);
 
             settings.LastBackupUtc = DateTimeOffset.UtcNow;
-            settings.LastBackupStatus = $"Sauvegarde OK — {snapshotName}";
+            settings.LastBackupStatus = $"Sauvegarde Data + Vault OK — {snapshotName}";
             return BackupResult.Ok(snapshotPath, files.Count, totalBytes);
         }
         catch (Exception ex)
@@ -154,6 +164,9 @@ public sealed class VaultBackupService
             TryDeleteDirectory(directory.FullName);
         }
     }
+
+    private static bool Overlaps(string first, string second) =>
+        IsSameOrNested(first, second) || IsSameOrNested(second, first);
 
     private static bool IsSameOrNested(string candidate, string parent)
     {
@@ -187,6 +200,7 @@ public sealed class VaultBackupService
 
     private sealed record BackupManifest(
         DateTimeOffset CreatedAtUtc,
+        string SourceData,
         string SourceVault,
         int FileCount,
         long TotalBytes,
@@ -211,7 +225,7 @@ public sealed record BackupProgress(
 public sealed record BackupResult(bool Success, string Message, string? SnapshotPath, int FileCount, long TotalBytes)
 {
     public static BackupResult Ok(string snapshotPath, int fileCount, long totalBytes) =>
-        new(true, "Sauvegarde terminée et vérifiée.", snapshotPath, fileCount, totalBytes);
+        new(true, "Sauvegarde Data + Vault terminée et vérifiée.", snapshotPath, fileCount, totalBytes);
 
     public static BackupResult Fail(string message) =>
         new(false, message, null, 0, 0);
