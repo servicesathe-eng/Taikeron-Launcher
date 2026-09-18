@@ -1,7 +1,7 @@
 {
-  "version": "0.4.1",
-  "requestedAtUtc": "2026-09-18T06:35:30Z",
+  "version": "0.4.2",
+  "requestedAtUtc": "2026-09-18T07:03:00Z",
   "channel": "stable",
   "runner": "github-hosted-windows",
-  "reason": "Publish Windows installer EXE for Launcher 0.4.1"
+  "reason": "Public release Launcher 0.4.2 with TL version fix and contextual primary button"
 }
