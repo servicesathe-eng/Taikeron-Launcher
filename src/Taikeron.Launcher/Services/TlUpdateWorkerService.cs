@@ -132,7 +132,47 @@ public sealed class TlUpdateWorkerService
         if (result is null)
             throw new InvalidOperationException($"Le worker TL a terminé sans résultat exploitable (code {process.ExitCode}).");
 
+        if (result.Ok)
+        {
+            TryDeleteFile(installerPath);
+            TryDeleteFile(installerPath + ".part");
+            TryDeleteDirectory(jobDirectory);
+            CleanupOldJobs(jobsRoot);
+        }
+
         return result;
+    }
+
+    private static void CleanupOldJobs(string jobsRoot)
+    {
+        if (!Directory.Exists(jobsRoot))
+            return;
+
+        foreach (var directory in Directory.EnumerateDirectories(jobsRoot, "tlreplace-*", SearchOption.TopDirectoryOnly))
+            TryDeleteDirectory(directory);
+    }
+
+    private static void TryDeleteFile(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+            {
+                File.SetAttributes(path, FileAttributes.Normal);
+                File.Delete(path);
+            }
+        }
+        catch { }
+    }
+
+    private static void TryDeleteDirectory(string path)
+    {
+        try
+        {
+            if (Directory.Exists(path))
+                Directory.Delete(path, true);
+        }
+        catch { }
     }
 
     private static TlWorkerStatus? ReadStatus(string statusFile)
