@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Taikeron.Launcher.Models;
+using Taikeron.Shared;
 
 namespace Taikeron.Launcher.Services;
 
@@ -62,6 +63,7 @@ public sealed class LauncherSettingsService
     public void Save(LauncherSettings settings)
     {
         ApplyMissingDefaults(settings);
+        ValidatePersistentRootsOutsideRuntime(settings);
         Directory.CreateDirectory(SettingsDirectory);
         PersistWithoutReapplying(settings);
         Current = settings;
@@ -100,6 +102,45 @@ public sealed class LauncherSettingsService
         }
 
         return dataParent;
+    }
+
+    private static void ValidatePersistentRootsOutsideRuntime(LauncherSettings settings)
+    {
+        var persistentRoots = new[]
+        {
+            ("Data", settings.DataRoot),
+            ("Vault", settings.VaultRoot),
+            ("Maps", settings.MapsRoot),
+            ("Backup", settings.BackupRoot)
+        };
+
+        foreach (var (label, raw) in persistentRoots)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+                continue;
+
+            var root = NormalizePath(raw).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            foreach (var runtime in TlRuntimeCleanup.CandidateDirectories())
+            {
+                if (string.Equals(root, runtime, StringComparison.OrdinalIgnoreCase)
+                    || IsPathInside(root, runtime)
+                    || IsPathInside(runtime, root))
+                {
+                    throw new InvalidOperationException(
+                        $"{label} ne peut pas être placé dans ou autour d’un profil runtime Electron/Chromium Taikeron. Choisis un dossier persistant séparé.");
+                }
+            }
+        }
+    }
+
+    private static bool IsPathInside(string candidate, string parent)
+    {
+        var fullCandidate = NormalizePath(candidate);
+        var fullParent = NormalizePath(parent)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            + Path.DirectorySeparatorChar;
+
+        return fullCandidate.StartsWith(fullParent, StringComparison.OrdinalIgnoreCase);
     }
 
     private static void ApplyMissingDefaults(LauncherSettings settings)
