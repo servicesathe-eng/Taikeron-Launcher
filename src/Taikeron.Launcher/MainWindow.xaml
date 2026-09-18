@@ -230,7 +230,7 @@
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="0" Text="◉  Canal stable" Foreground="{StaticResource Muted}"/>
-                            <TextBlock Grid.Column="1" Text="✓  Installation vérifiée" Foreground="{StaticResource Muted}" HorizontalAlignment="Center"/>
+                            <TextBlock x:Name="FooterInstallStateText" Grid.Column="1" Text="◉  État TL en cours de vérification" Foreground="{StaticResource Muted}" HorizontalAlignment="Center"/>
                             <TextBlock Grid.Column="2" Text="◉  Données séparées du code" Foreground="{StaticResource Muted}" HorizontalAlignment="Right"/>
                         </Grid>
                     </Border>
