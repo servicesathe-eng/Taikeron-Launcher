@@ -42,7 +42,9 @@ public sealed class TlUpdateWorkerService
             ? Path.GetDirectoryName(Path.GetFullPath(installedExecutable))!
             : Path.Combine(_settingsService.Current.AppsRoot, "Lab");
 
-        var executablePath = Path.Combine(installDirectory, "Taikeron Lab.exe");
+        var executablePath = !string.IsNullOrWhiteSpace(installedExecutable) && File.Exists(installedExecutable)
+            ? Path.GetFullPath(installedExecutable)
+            : Path.Combine(installDirectory, "Taikeron.exe");
         var jobsRoot = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "Taikeron",
