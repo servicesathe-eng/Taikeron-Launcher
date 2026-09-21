@@ -113,11 +113,11 @@ internal static class Program
                     throw new InvalidOperationException($"L’installateur TL a quitté avec le code {installerProcess.ExitCode}.");
             }
 
-            var installedExecutable = Path.Combine(installDirectory, "Taikeron Lab.exe");
+            var installedExecutable = Path.Combine(installDirectory, "Taikeron.exe");
             var installedAsar = Path.Combine(installDirectory, "resources", "app.asar");
 
             if (!File.Exists(installedExecutable))
-                throw new FileNotFoundException("Taikeron Lab.exe est absent après installation.", installedExecutable);
+                throw new FileNotFoundException("Taikeron.exe est absent après installation.", installedExecutable);
             if (!File.Exists(installedAsar))
                 throw new FileNotFoundException("resources\\app.asar est absent après installation.", installedAsar);
 
@@ -228,8 +228,13 @@ internal static class Program
         if (forbiddenRoots.Any(path => !string.IsNullOrWhiteSpace(path) && string.Equals(Path.GetFullPath(path).TrimEnd('\\', '/'), installDirectory, StringComparison.OrdinalIgnoreCase)))
             throw new InvalidOperationException("Le dossier cible est trop large pour être nettoyé en sécurité.");
 
-        if (!IsPathInside(executablePath, installDirectory) || !string.Equals(Path.GetFileName(executablePath), "Taikeron Lab.exe", StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException("L’exécutable TL attendu n’appartient pas au dossier d’installation demandé.");
+        var executableName = Path.GetFileName(executablePath);
+        var supportedExecutableName =
+            string.Equals(executableName, "Taikeron.exe", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(executableName, "Taikeron Lab.exe", StringComparison.OrdinalIgnoreCase);
+
+        if (!IsPathInside(executablePath, installDirectory) || !supportedExecutableName)
+            throw new InvalidOperationException("L’exécutable Taikeron attendu n’appartient pas au dossier d’installation demandé.");
 
         if (File.Exists(executablePath))
         {
@@ -240,7 +245,7 @@ internal static class Program
         }
         else if (Directory.Exists(installDirectory) && Directory.EnumerateFileSystemEntries(installDirectory).Any())
         {
-            throw new InvalidOperationException("Le dossier cible existe mais ne contient pas Taikeron Lab.exe. Nettoyage refusé pour protéger les fichiers présents.");
+            throw new InvalidOperationException("Le dossier cible existe mais ne contient pas un exécutable Taikeron reconnu. Nettoyage refusé pour protéger les fichiers présents.");
         }
     }
 
