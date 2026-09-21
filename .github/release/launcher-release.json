@@ -1,7 +1,7 @@
 {
-  "version": "0.4.6",
+  "version": "0.4.7",
   "requestedAtUtc": "2026-09-18T17:29:00Z",
   "channel": "stable",
   "runner": "github-hosted-windows",
-  "reason": "Launcher 0.4.6: atomic full TL runtime replacement on update, Electron/Chromium cache purge, single-instance protection, complete TL uninstall preserving Data/Vault/Maps/Backup"
+  "reason": "Launcher 0.4.7: recognize Taikeron.exe for 2.400+ while preserving migration support for legacy Taikeron Lab.exe installations"
 }
