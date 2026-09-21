@@ -59,6 +59,8 @@ jobs:
           $iss = Get-Content 'installer/TaikeronLauncher.iss' -Raw
 
           if ($worker -notmatch 'TlRuntimeCleanup\.PurgeVolatileState') { throw 'Le worker TL ne purge plus le runtime Electron/Chromium.' }
+          if ($worker -notmatch 'Path\.Combine\(installDirectory, "Taikeron\.exe"\)') { throw 'Le worker TL ne vérifie plus Taikeron.exe après installation.' }
+          if ($worker -notmatch '"Taikeron Lab\.exe"') { throw 'La compatibilité de migration avec l’ancien exécutable TL a disparu.' }
           foreach ($root in @('dataRoot','vaultRoot','mapsRoot','backupRoot')) {
             if ($worker -notmatch [regex]::Escape($root)) { throw "Racine protégée absente du worker : $root" }
           }
@@ -67,7 +69,7 @@ jobs:
           if ($iss -notmatch 'Taikeron.+Runtime.+Lab') { throw 'Désinstalleur Windows sans purge runtime TL.' }
           if ($iss -match 'filesandordirs; Name: "\{localappdata\}\\Taikeron"\s*$') { throw 'Suppression globale du dossier Taikeron interdite.' }
 
-          Write-Host 'Contrat cleanup 0.4.6 vérifié : runtime destructible, Data/Vault/Maps/Backup protégés.'
+          Write-Host 'Contrat cleanup 0.4.7 vérifié : runtime destructible, Data/Vault/Maps/Backup protégés, Taikeron.exe canonique.'
 
       - name: Build launcher
         run: dotnet build src/Taikeron.Launcher/Taikeron.Launcher.csproj -c Release -r win-x64 --no-restore
