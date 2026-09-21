@@ -23,7 +23,8 @@ public sealed class TaikeronLabService
     }
 
     public string CanonicalInstallDirectory => Path.Combine(_settingsService.Current.AppsRoot, "Lab");
-    public string CanonicalExecutable => Path.Combine(CanonicalInstallDirectory, "Taikeron Lab.exe");
+    public string CanonicalExecutable => Path.Combine(CanonicalInstallDirectory, "Taikeron.exe");
+    private string LegacyCanonicalExecutable => Path.Combine(CanonicalInstallDirectory, "Taikeron Lab.exe");
 
     public string? FindInstalledExecutable()
     {
@@ -33,7 +34,16 @@ public sealed class TaikeronLabService
 
         string[] candidates =
         [
+            // Current 2.400+ identity.
             CanonicalExecutable,
+            Path.Combine(localAppData, "Programs", "Taikeron", "Taikeron.exe"),
+            Path.Combine(localAppData, "Programs", "Taikeron Lab", "Taikeron.exe"),
+            Path.Combine(localAppData, "Taikeron", "Taikeron.exe"),
+            Path.Combine(programFiles, "Taikeron", "Taikeron.exe"),
+            Path.Combine(programFilesX86, "Taikeron", "Taikeron.exe"),
+
+            // Legacy TL identity kept only so the Launcher can migrate older installs.
+            LegacyCanonicalExecutable,
             Path.Combine(localAppData, "Programs", "Taikeron Lab", "Taikeron Lab.exe"),
             Path.Combine(localAppData, "Taikeron Lab", "Taikeron Lab.exe"),
             Path.Combine(programFiles, "Taikeron Lab", "Taikeron Lab.exe"),
