@@ -136,8 +136,11 @@ internal static class ProgramV2
                 CreateNoWindow = true,
                 WorkingDirectory = stagingDirectory
             };
+            // Le worker a déjà supprimé intégralement l'ancien runtime.
+            // On lance donc NSIS comme une installation propre silencieuse, et non
+            // en mode electron-updater "--updated", afin que le payload installé
+            // soit strictement identique à une installation manuelle propre.
             startInfo.ArgumentList.Add("/S");
-            startInfo.ArgumentList.Add("--updated");
             startInfo.ArgumentList.Add("/D=" + installDirectory);
 
             using (var installerProcess = Process.Start(startInfo)

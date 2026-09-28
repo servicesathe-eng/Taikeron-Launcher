@@ -61,6 +61,9 @@ jobs:
           if ($worker -notmatch 'TlRuntimeCleanup\.PurgeVolatileState') { throw 'Le worker TL ne purge plus le runtime Electron/Chromium.' }
           if ($worker -notmatch 'Path\.Combine\(installDirectory, "Taikeron\.exe"\)') { throw 'Le worker TL ne vérifie plus Taikeron.exe après installation.' }
           if ($worker -notmatch '"Taikeron Lab\.exe"') { throw 'La compatibilité de migration avec l’ancien exécutable TL a disparu.' }
+          if ($worker -match 'ArgumentList\.Add\("--updated"\)') { throw 'Le worker ne doit pas lancer NSIS en mode --updated après avoir supprimé intégralement l’ancien runtime.' }
+          if ($worker -notmatch 'ArgumentList\.Add\("/S"\)') { throw 'Installation silencieuse NSIS absente du worker.' }
+          if ($worker -notmatch 'ArgumentList\.Add\("/D=" \+ installDirectory\)') { throw 'Dossier cible NSIS explicite absent du worker.' }
           foreach ($root in @('dataRoot','vaultRoot','mapsRoot','backupRoot')) {
             if ($worker -notmatch [regex]::Escape($root)) { throw "Racine protégée absente du worker : $root" }
           }
@@ -69,7 +72,7 @@ jobs:
           if ($iss -notmatch 'Taikeron.+Runtime.+Lab') { throw 'Désinstalleur Windows sans purge runtime TL.' }
           if ($iss -match 'filesandordirs; Name: "\{localappdata\}\\Taikeron"\s*$') { throw 'Suppression globale du dossier Taikeron interdite.' }
 
-          Write-Host 'Contrat cleanup 0.4.7 vérifié : runtime destructible, Data/Vault/Maps/Backup protégés, Taikeron.exe canonique.'
+          Write-Host 'Contrat cleanup 0.4.8 vérifié : runtime destructible, Data/Vault/Maps/Backup protégés, réinstallation NSIS propre sans --updated.'
 
       - name: Build launcher
         run: dotnet build src/Taikeron.Launcher/Taikeron.Launcher.csproj -c Release -r win-x64 --no-restore
