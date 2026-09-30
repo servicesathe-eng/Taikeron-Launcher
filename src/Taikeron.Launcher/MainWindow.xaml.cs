@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Input;
 using System.Windows.Threading;
 using Taikeron.Launcher.Models;
@@ -87,7 +88,7 @@ public partial class MainWindow : Window
 
     private void ApplyTlIdentity()
     {
-        ProductHeroCodeText.Text = "TL";
+        ProductHeroImage.Source = new BitmapImage(new Uri("pack://application:,,,/Assets/TaikeronLabMark.png", UriKind.Absolute));
         ProductHeroTitleText.Text = "Taikeron Lab (TL)";
         ProductHeroSubtitleText.Text = "Création, édition et analyse de parcours cyclistes.";
         ProductHeroDescriptionText.Text = "Le Launcher installe, vérifie, répare et met à jour TL.";
@@ -100,7 +101,7 @@ public partial class MainWindow : Window
 
     private void ApplyTmbPanel()
     {
-        ProductHeroCodeText.Text = "TMB";
+        ProductHeroImage.Source = new BitmapImage(new Uri("pack://application:,,,/Assets/TaikeronMapBuilderMark.png", UriKind.Absolute));
         ProductHeroTitleText.Text = "Taikeron Map Builder (TMB)";
         ProductHeroSubtitleText.Text = "Création et préparation de cartes Taikeron.";
         ProductHeroDescriptionText.Text = "TMB est maintenant sélectionnable depuis la colonne de gauche.";

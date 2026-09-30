@@ -1,7 +1,7 @@
 {
-  "version": "0.4.8",
-  "requestedAtUtc": "2026-09-28T16:49:00Z",
+  "version": "0.4.9",
+  "requestedAtUtc": "2026-09-30T08:00:00Z",
   "channel": "stable",
   "runner": "github-hosted-windows",
-  "reason": "Launcher 0.4.8: restore clean TL reinstall semantics; after destructive runtime removal, launch NSIS as a fresh silent install instead of electron-updater --updated mode"
+  "reason": "Launcher 0.4.9: UI-only identity update; replace TL/MAP text badges with Taikeron Lab and Taikeron Map Builder marks, and use the TL mark as the Windows Launcher icon"
 }
