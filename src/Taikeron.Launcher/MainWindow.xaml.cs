@@ -15,20 +15,26 @@ public partial class MainWindow : Window
     private readonly TlIntegrityService _integrityService = new();
     private readonly LauncherSelfUpdateService _launcherSelfUpdateService = new();
     private readonly TaikeronLabService _labService;
+    private readonly TaikeronMapBuilderService _tmbService;
     private readonly TlUpdateWorkerService _updateWorkerService;
     private readonly DispatcherTimer _backupTimer;
 
     private TlReleaseManifest? _stableRelease;
+    private TmbReleaseManifest? _tmbStableRelease;
     private LauncherReleaseInfo? _launcherRelease;
     private TlIntegrityCheckResult? _integrityResult;
+    private TmbIntegrityCheckResult? _tmbIntegrityResult;
     private string? _installedExecutable;
     private string? _installedVersion;
+    private string? _tmbInstalledExecutable;
+    private string? _tmbInstalledVersion;
     private bool _backupInProgress;
     private string _selectedProduct = "TL";
 
     public MainWindow()
     {
         _labService = new TaikeronLabService(_settingsService);
+        _tmbService = new TaikeronMapBuilderService(_settingsService);
         _updateWorkerService = new TlUpdateWorkerService(_settingsService);
         _backupTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(10) };
         _backupTimer.Tick += async (_, _) => await CheckAutomaticBackupAsync();
@@ -64,7 +70,8 @@ public partial class MainWindow : Window
 
         if (string.Equals(product, "TMB", StringComparison.OrdinalIgnoreCase))
         {
-            ApplyTmbPanel();
+            ApplyTmbIdentity();
+            await RefreshTmbAsync();
             return;
         }
 
@@ -97,39 +104,19 @@ public partial class MainWindow : Window
         ProductBullet3Text.Text = "• Remplacement intégral runtime + caches, Data/Vault/Maps protégés";
         RepairActionButton.IsEnabled = true;
         UninstallButton.IsEnabled = true;
+        UninstallButton.Content = "✕  Désinstaller TL";
     }
 
-    private void ApplyTmbPanel()
+    private void ApplyTmbIdentity()
     {
         ProductHeroImage.Source = new BitmapImage(new Uri("pack://application:,,,/Assets/TaikeronMapBuilderMark.png", UriKind.Absolute));
         ProductHeroTitleText.Text = "Taikeron Map Builder (TMB)";
         ProductHeroSubtitleText.Text = "Création et préparation de cartes Taikeron.";
-        ProductHeroDescriptionText.Text = "TMB est maintenant sélectionnable depuis la colonne de gauche.";
-        ProductBullet1Text.Text = "• Outil Windows de génération cartographique";
-        ProductBullet2Text.Text = "• Gestion séparée des cartes Taikeron";
-        ProductBullet3Text.Text = "• Intégration Launcher prévue dans une étape dédiée";
-
-        StatusDot.Fill = (Brush)FindResource("Gold");
-        StatusText.Foreground = (Brush)FindResource("GoldBright");
-        StatusText.Text = "TMB sélectionné";
-        UpdateBadge.Visibility = Visibility.Collapsed;
-        InstalledVersionText.Text = "—";
-        LatestVersionText.Text = "—";
-        InstallPathText.Text = "La sélection TMB est active. Installation et mise à jour TMB restent séparées pour le moment.";
-        VersionCardValue.Text = "TMB";
-        DownloadSizeText.Text = "Taille : —";
-        VersionDateText.Text = "Publication : —";
-        LaunchButton.Content = "▶  Lancer TMB";
-        LaunchButton.Style = (Style)FindResource("ActionButton");
-        LaunchButton.IsEnabled = false;
-        UpdateButton.Content = "↓  Mettre à jour TMB";
-        UpdateButton.IsEnabled = false;
-        RepairActionButton.IsEnabled = false;
-        UninstallButton.IsEnabled = false;
-        ShaStatusText.Text = "Gestion TMB non activée";
-        FooterInstallStateText.Text = "◉  TMB sélectionné";
-        ActivityText.Text = "TMB est sélectionné dans le Launcher.";
-        DownloadProgress.Visibility = Visibility.Collapsed;
+        ProductHeroDescriptionText.Text = "Le Launcher installe, vérifie, répare et met à jour TMB.";
+        ProductBullet1Text.Text = "• Runtime Portable officiel géré dans Apps/MapBuilder";
+        ProductBullet2Text.Text = "• Vérification taille + SHA-256 du binaire public";
+        ProductBullet3Text.Text = "• Workspace et cartes restent séparés du code";
+        UninstallButton.Content = "✕  Désinstaller TMB";
     }
 
     private async Task<bool> CheckLauncherSelfUpdateAsync()
@@ -210,7 +197,7 @@ public partial class MainWindow : Window
     {
         if (!string.Equals(_selectedProduct, "TL", StringComparison.OrdinalIgnoreCase))
         {
-            ApplyTmbPanel();
+            await RefreshTmbAsync(forceRemoteRefresh);
             return;
         }
 
@@ -253,6 +240,176 @@ public partial class MainWindow : Window
         finally
         {
             SetBusy(false);
+        }
+    }
+
+    private async Task RefreshTmbAsync(bool forceRemoteRefresh = false)
+    {
+        SetBusy(true, "Vérification de Taikeron Map Builder…");
+
+        try
+        {
+            _tmbInstalledExecutable = _tmbService.FindInstalledExecutable();
+            _tmbInstalledVersion = _tmbService.GetInstalledVersion(_tmbInstalledExecutable);
+
+            InstallPathText.Text = _tmbInstalledExecutable is null
+                ? $"TMB non détecté. Emplacement canonique prévu : {_tmbService.CanonicalInstallDirectory}"
+                : _tmbInstalledExecutable;
+            InstalledVersionText.Text = _tmbInstalledVersion ?? "Non installé";
+
+            _tmbStableRelease = await _tmbService.GetStableReleaseAsync(forceRemoteRefresh);
+            LatestVersionText.Text = string.IsNullOrWhiteSpace(_tmbStableRelease?.Version)
+                ? "—"
+                : _tmbStableRelease.Version;
+            VersionCardValue.Text = LatestVersionText.Text;
+            DownloadSizeText.Text = _tmbStableRelease is null
+                ? "Taille : —"
+                : $"Taille : {FormatBytes(_tmbStableRelease.Bytes)}";
+            VersionDateText.Text = _tmbStableRelease?.PublishedAt is null
+                ? "Publication : —"
+                : $"Publication : {_tmbStableRelease.PublishedAt.Value.LocalDateTime:dd/MM/yyyy HH:mm}";
+
+            _tmbIntegrityResult = await _tmbService.VerifyAsync(
+                _tmbInstalledExecutable,
+                _tmbInstalledVersion,
+                _tmbStableRelease);
+            ApplyTmbTruthStatus();
+        }
+        catch (Exception ex)
+        {
+            StatusDot.Fill = Brushes.OrangeRed;
+            StatusText.Foreground = Brushes.OrangeRed;
+            StatusText.Text = "Vérification TMB incomplète";
+            LatestVersionText.Text = "Indisponible";
+            UpdateBadge.Visibility = Visibility.Collapsed;
+            UpdateButton.IsEnabled = false;
+            ShaStatusText.Text = "Référence officielle TMB indisponible";
+            FooterInstallStateText.Text = "⚠  État TMB non vérifié";
+            ActivityText.Text = $"Impossible d’établir l’état officiel de TMB : {ex.Message}";
+        }
+        finally
+        {
+            SetBusy(false);
+        }
+    }
+
+    private void ApplyTmbTruthStatus()
+    {
+        var updateAvailable = _tmbService.IsUpdateAvailable(
+            _tmbInstalledVersion,
+            _tmbStableRelease?.Version);
+        var installed = _tmbInstalledExecutable is not null;
+        var blocked = _tmbIntegrityResult?.BlocksLaunch == true;
+        var managed = _tmbService.IsLauncherManaged(_tmbInstalledExecutable);
+
+        UpdateBadge.Visibility = updateAvailable || blocked || (installed && !managed)
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        UpdateBadgeText.Text = blocked
+            ? "Réparation requise"
+            : installed && !managed
+                ? "Migration Launcher"
+                : updateAvailable
+                    ? "Mise à jour disponible"
+                    : "";
+
+        RepairActionButton.IsEnabled = true;
+        UninstallButton.IsEnabled = managed;
+
+        if (!installed || _tmbIntegrityResult?.State == TmbIntegrityState.NotInstalled)
+        {
+            StatusDot.Fill = Brushes.DarkOrange;
+            StatusText.Foreground = Brushes.DarkOrange;
+            StatusText.Text = "Non installé";
+            ShaStatusText.Text = "Intégrité : non applicable";
+            FooterInstallStateText.Text = "◉  TMB non installé";
+            ActivityText.Text = $"TMB pourra être installé dans {_tmbService.CanonicalInstallDirectory}.";
+            ApplyTmbLaunchButtonState(updateAvailable);
+            return;
+        }
+
+        if (_tmbIntegrityResult?.State == TmbIntegrityState.Corrupted)
+        {
+            StatusDot.Fill = Brushes.OrangeRed;
+            StatusText.Foreground = Brushes.OrangeRed;
+            StatusText.Text = "Installation TMB altérée";
+            ShaStatusText.Text = "SHA-256 TMB : ÉCHEC";
+            FooterInstallStateText.Text = "⚠  Installation TMB à réparer";
+            ActivityText.Text = _tmbIntegrityResult.Message;
+            ApplyTmbLaunchButtonState(updateAvailable);
+            return;
+        }
+
+        if (_tmbIntegrityResult?.State == TmbIntegrityState.Healthy)
+        {
+            StatusDot.Fill = (Brush)FindResource("Green");
+            StatusText.Foreground = (Brush)FindResource("Green");
+            StatusText.Text = updateAvailable ? "Installé · intact" : "Installé · intact · à jour";
+            ShaStatusText.Text = "Portable TMB vérifié · SHA-256 conforme";
+            FooterInstallStateText.Text = "✓  Installation TMB vérifiée";
+            ActivityText.Text = updateAvailable
+                ? "Runtime TMB vérifié. Une version plus récente est disponible."
+                : _tmbIntegrityResult.Message;
+            ApplyTmbLaunchButtonState(updateAvailable);
+            return;
+        }
+
+        if (_tmbIntegrityResult?.State == TmbIntegrityState.LegacyUnmanaged)
+        {
+            StatusDot.Fill = Brushes.DarkOrange;
+            StatusText.Foreground = Brushes.DarkOrange;
+            StatusText.Text = "Installé · hors gestion Launcher";
+            ShaStatusText.Text = "Intégrité : installation historique";
+            FooterInstallStateText.Text = "◉  TMB détecté hors Apps/MapBuilder";
+            ActivityText.Text = "TMB peut être lancé tel quel ou migré vers le runtime Portable géré par le Launcher.";
+            ApplyTmbLaunchButtonState(updateAvailable);
+            return;
+        }
+
+        StatusDot.Fill = Brushes.DarkOrange;
+        StatusText.Foreground = Brushes.DarkOrange;
+        StatusText.Text = updateAvailable ? "Installé · mise à jour disponible" : "Installé · référence incomplète";
+        ShaStatusText.Text = "Intégrité : référence locale non comparable";
+        FooterInstallStateText.Text = "◉  Installation TMB non certifiée";
+        ActivityText.Text = _tmbIntegrityResult?.Message ?? "Impossible de certifier le runtime TMB.";
+        ApplyTmbLaunchButtonState(updateAvailable);
+    }
+
+    private void ApplyTmbLaunchButtonState(bool updateAvailable)
+    {
+        var installed = _tmbInstalledExecutable is not null;
+        var blocked = _tmbIntegrityResult?.BlocksLaunch == true;
+        var managed = _tmbService.IsLauncherManaged(_tmbInstalledExecutable);
+        var ready = installed && !blocked && (!managed || !updateAvailable);
+
+        LaunchButton.Style = (Style)FindResource(ready ? "GoldButton" : "ActionButton");
+        LaunchButton.IsEnabled = ready || _tmbStableRelease is not null;
+        UpdateButton.IsEnabled = _tmbStableRelease is not null;
+
+        if (!installed)
+        {
+            LaunchButton.Content = "↓  Installer TMB";
+            UpdateButton.Content = "↓  Installer TMB";
+        }
+        else if (blocked)
+        {
+            LaunchButton.Content = "↻  Réparer TMB";
+            UpdateButton.Content = "↻  Réinstaller TMB";
+        }
+        else if (!managed)
+        {
+            LaunchButton.Content = "▶  Lancer TMB";
+            UpdateButton.Content = "↓  Migrer TMB vers le Launcher";
+        }
+        else if (updateAvailable)
+        {
+            LaunchButton.Content = "↓  Mettre à jour TMB";
+            UpdateButton.Content = "↓  Mettre à jour TMB";
+        }
+        else
+        {
+            LaunchButton.Content = "▶  Lancer TMB";
+            UpdateButton.Content = "↻  Réinstaller proprement";
         }
     }
 
@@ -388,6 +545,34 @@ public partial class MainWindow : Window
 
     private void LaunchButton_Click(object sender, RoutedEventArgs e)
     {
+        if (string.Equals(_selectedProduct, "TMB", StringComparison.OrdinalIgnoreCase))
+        {
+            var updateAvailable = _tmbService.IsUpdateAvailable(
+                _tmbInstalledVersion,
+                _tmbStableRelease?.Version);
+            var managed = _tmbService.IsLauncherManaged(_tmbInstalledExecutable);
+            var ready = _tmbInstalledExecutable is not null
+                && _tmbIntegrityResult?.BlocksLaunch != true
+                && (!managed || !updateAvailable);
+
+            if (!ready)
+            {
+                UpdateButton_Click(sender, e);
+                return;
+            }
+
+            try
+            {
+                _tmbService.Launch(_tmbInstalledExecutable!);
+                ActivityText.Text = "Taikeron Map Builder lancé.";
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message, "Impossible de lancer TMB", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            return;
+        }
+
         if (!string.Equals(_selectedProduct, "TL", StringComparison.OrdinalIgnoreCase))
             return;
 
@@ -447,6 +632,12 @@ public partial class MainWindow : Window
 
     private async void UpdateButton_Click(object sender, RoutedEventArgs e)
     {
+        if (string.Equals(_selectedProduct, "TMB", StringComparison.OrdinalIgnoreCase))
+        {
+            await InstallOrUpdateTmbAsync();
+            return;
+        }
+
         if (!string.Equals(_selectedProduct, "TL", StringComparison.OrdinalIgnoreCase))
             return;
 
@@ -546,8 +737,140 @@ public partial class MainWindow : Window
         }
     }
 
+    private async Task InstallOrUpdateTmbAsync()
+    {
+        if (!_settingsService.Current.InitialSetupCompleted)
+        {
+            var setup = new FirstInstallWindow(_settingsService)
+            {
+                Owner = this
+            };
+
+            if (setup.ShowDialog() != true)
+            {
+                ActivityText.Text = "Installation TMB annulée avant choix des emplacements.";
+                return;
+            }
+
+            _settingsService.EnsureConfiguredDirectories();
+        }
+
+        if (_tmbStableRelease is null)
+        {
+            MessageBox.Show(
+                "Aucune release stable TMB n’est chargée.",
+                "Taikeron Launcher",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return;
+        }
+
+        DownloadProgress.Visibility = Visibility.Visible;
+        DownloadProgress.Value = 0;
+        SetBusy(true, $"Téléchargement de TMB {_tmbStableRelease.Version}…");
+
+        try
+        {
+            var downloadProgress = new Progress<double>(value =>
+            {
+                DownloadProgress.Value = value * 100;
+                ActivityText.Text = $"Téléchargement et vérification du Portable TMB… {value:P0}";
+            });
+
+            var packagePath = await _tmbService.DownloadAndVerifyAsync(
+                _tmbStableRelease,
+                downloadProgress);
+
+            DownloadProgress.Value = 100;
+            var installProgress = new Progress<string>(message => ActivityText.Text = message);
+            var executable = await _tmbService.InstallOrReplaceAsync(
+                packagePath,
+                _tmbStableRelease,
+                _tmbInstalledExecutable,
+                installProgress);
+
+            _tmbInstalledExecutable = executable;
+            ActivityText.Text = "Runtime TMB installé. Contrôle SHA-256 final…";
+            await RefreshTmbAsync(forceRemoteRefresh: true);
+
+            if (_tmbIntegrityResult?.BlocksLaunch == true)
+                throw new InvalidOperationException(
+                    "TMB a été installé, mais le contrôle SHA-256 final a échoué.");
+
+            _tmbService.Launch(executable);
+            MessageBox.Show(
+                $"Taikeron Map Builder {_tmbStableRelease.Version} a été installé et vérifié.\n\n" +
+                $"Runtime : {_tmbService.CanonicalInstallDirectory}\n" +
+                "Le workspace, les cartes et la configuration TMB restent séparés du code.",
+                "Installation TMB terminée",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            DownloadProgress.Value = 0;
+            ActivityText.Text = $"Échec TMB : {ex.Message}";
+            MessageBox.Show(
+                ex.Message,
+                "Échec de l’installation TMB",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+        finally
+        {
+            SetBusy(false);
+        }
+    }
+
     private async void UninstallButton_Click(object sender, RoutedEventArgs e)
     {
+        if (string.Equals(_selectedProduct, "TMB", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!_tmbService.IsLauncherManaged(_tmbInstalledExecutable))
+            {
+                MessageBox.Show(
+                    "Cette installation TMB n’est pas gérée par le Launcher. Elle ne sera pas supprimée automatiquement.",
+                    "TMB hors gestion Launcher",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+                return;
+            }
+
+            var confirm = MessageBox.Show(
+                "Supprimer le runtime Taikeron Map Builder géré par le Launcher ?\n\n" +
+                "Le workspace TMB, les cartes produites et la configuration utilisateur sont conservés.",
+                "Désinstaller Taikeron Map Builder",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning);
+            if (confirm != MessageBoxResult.Yes)
+                return;
+
+            try
+            {
+                SetBusy(true, "Désinstallation du runtime TMB…");
+                var progress = new Progress<string>(message => ActivityText.Text = message);
+                var removed = await _tmbService.UninstallAsync(_tmbInstalledExecutable, progress);
+                _tmbInstalledExecutable = null;
+                _tmbInstalledVersion = null;
+                _tmbIntegrityResult = null;
+                await RefreshTmbAsync(forceRemoteRefresh: true);
+                MessageBox.Show(
+                    $"Runtime TMB supprimé :\n{removed}\n\nWorkspace et cartes conservés.",
+                    "Désinstallation TMB terminée",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message, "Échec de désinstallation TMB", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                SetBusy(false);
+            }
+            return;
+        }
+
         if (!string.Equals(_selectedProduct, "TL", StringComparison.OrdinalIgnoreCase))
             return;
 
@@ -607,9 +930,20 @@ public partial class MainWindow : Window
 
     private async void RefreshButton_Click(object sender, RoutedEventArgs e)
     {
-        if (!string.Equals(_selectedProduct, "TL", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(_selectedProduct, "TMB", StringComparison.OrdinalIgnoreCase))
         {
-            ApplyTmbPanel();
+            RefreshButton.IsEnabled = false;
+            var tmbPreviousContent = RefreshButton.Content;
+            RefreshButton.Content = "↻  Actualisation…";
+            try
+            {
+                await RefreshTmbAsync(forceRemoteRefresh: true);
+            }
+            finally
+            {
+                RefreshButton.Content = tmbPreviousContent;
+                RefreshButton.IsEnabled = true;
+            }
             return;
         }
 
@@ -630,11 +964,17 @@ public partial class MainWindow : Window
 
     private async void RepairButton_Click(object sender, RoutedEventArgs e)
     {
-        if (!string.Equals(_selectedProduct, "TL", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(_selectedProduct, "TMB", StringComparison.OrdinalIgnoreCase))
         {
+            await RefreshTmbAsync(forceRemoteRefresh: true);
+            var integrity = _tmbIntegrityResult?.Message ?? "État d’intégrité inconnu.";
+            var location = _tmbInstalledExecutable ?? _tmbService.CanonicalInstallDirectory;
             MessageBox.Show(
-                "TMB est bien sélectionné. Sa gestion installation/réparation sera branchée séparément.",
-                "Taikeron Map Builder",
+                $"Installation :\n{location}\n\n" +
+                $"Version : {_tmbInstalledVersion ?? "non installée"}\n\n" +
+                $"État Launcher :\n{integrity}\n\n" +
+                "Réinstaller TMB remplace uniquement le runtime géré ; workspace et cartes sont conservés.",
+                "Diagnostic TMB",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
             return;
@@ -711,19 +1051,21 @@ public partial class MainWindow : Window
 
     private void SetBusy(bool busy, string? text = null)
     {
-        if (!string.Equals(_selectedProduct, "TL", StringComparison.OrdinalIgnoreCase))
+        if (busy)
         {
             LaunchButton.IsEnabled = false;
             UpdateButton.IsEnabled = false;
             RepairActionButton.IsEnabled = false;
             UninstallButton.IsEnabled = false;
         }
-        else if (busy)
+        else if (string.Equals(_selectedProduct, "TMB", StringComparison.OrdinalIgnoreCase))
         {
-            LaunchButton.IsEnabled = false;
-            UpdateButton.IsEnabled = false;
-            RepairActionButton.IsEnabled = false;
-            UninstallButton.IsEnabled = false;
+            var updateAvailable = _tmbService.IsUpdateAvailable(
+                _tmbInstalledVersion,
+                _tmbStableRelease?.Version);
+            ApplyTmbLaunchButtonState(updateAvailable);
+            RepairActionButton.IsEnabled = true;
+            UninstallButton.IsEnabled = _tmbService.IsLauncherManaged(_tmbInstalledExecutable);
         }
         else
         {
