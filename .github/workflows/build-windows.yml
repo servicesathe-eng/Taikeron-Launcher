@@ -74,6 +74,23 @@ jobs:
 
           Write-Host 'Contrat cleanup 0.4.8 vérifié : runtime destructible, Data/Vault/Maps/Backup protégés, réinstallation NSIS propre sans --updated.'
 
+      - name: Verify TMB Launcher integration contract
+        shell: powershell
+        run: |
+          $service = Get-Content 'src/Taikeron.Launcher/Services/TaikeronMapBuilderService.cs' -Raw
+          $model = Get-Content 'src/Taikeron.Launcher/Models/TmbReleaseManifest.cs' -Raw
+          $ui = Get-Content 'src/Taikeron.Launcher/MainWindow.xaml.cs' -Raw
+
+          if ($service -notmatch 'releases/tmb/stable\.json') { throw 'Manifeste public TMB non branché.' }
+          if ($model -notmatch 'windows-x64-portable') { throw 'Artefact TMB Portable x64 absent du contrat.' }
+          if ($service -notmatch 'Path\.Combine\(_settingsService\.Current\.AppsRoot, "MapBuilder"\)') { throw 'Racine Apps/MapBuilder absente.' }
+          if ($service -notmatch 'ComputeSha256Async') { throw 'Vérification SHA-256 TMB absente.' }
+          if ($service -notmatch 'Workspace|workspace' -and $ui -notmatch 'workspace') { throw 'Protection du workspace TMB non documentée dans le flux.' }
+          if ($ui -notmatch 'InstallOrUpdateTmbAsync') { throw 'Actions installation/mise à jour TMB absentes de l UI.' }
+          if ($ui -match 'Intégration Launcher prévue') { throw 'Placeholder TMB historique encore actif.' }
+
+          Write-Host 'Contrat TMB Launcher vérifié : manifeste public, Portable x64, SHA-256, Apps/MapBuilder et UI active.'
+
       - name: Build launcher
         run: dotnet build src/Taikeron.Launcher/Taikeron.Launcher.csproj -c Release -r win-x64 --no-restore
 
