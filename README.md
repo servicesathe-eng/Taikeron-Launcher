@@ -45,4 +45,4 @@ Changing a configured path does not silently move or delete existing user data. 
 
 ## Applications
 
-Taikeron Lab (TL) is the first managed application. Taikeron Map Builder (TMB) is prepared as the next application integration.
+Taikeron Lab (TL) and Taikeron Map Builder (TMB) are both managed applications. TMB is downloaded from the public `releases/tmb/stable.json` manifest, installed as the verified Portable runtime under `Apps/MapBuilder`, and launched/updated/uninstalled from the same product selector as TL. Its workspace, generated maps and Electron configuration stay outside the replaceable application code.
