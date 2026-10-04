@@ -547,13 +547,13 @@ public partial class MainWindow : Window
     {
         if (string.Equals(_selectedProduct, "TMB", StringComparison.OrdinalIgnoreCase))
         {
-            var updateAvailable = _tmbService.IsUpdateAvailable(
+            var tmbUpdateAvailable = _tmbService.IsUpdateAvailable(
                 _tmbInstalledVersion,
                 _tmbStableRelease?.Version);
             var managed = _tmbService.IsLauncherManaged(_tmbInstalledExecutable);
             var ready = _tmbInstalledExecutable is not null
                 && _tmbIntegrityResult?.BlocksLaunch != true
-                && (!managed || !updateAvailable);
+                && (!managed || !tmbUpdateAvailable);
 
             if (!ready)
             {
@@ -836,13 +836,13 @@ public partial class MainWindow : Window
                 return;
             }
 
-            var confirm = MessageBox.Show(
+            var tmbConfirm = MessageBox.Show(
                 "Supprimer le runtime Taikeron Map Builder géré par le Launcher ?\n\n" +
                 "Le workspace TMB, les cartes produites et la configuration utilisateur sont conservés.",
                 "Désinstaller Taikeron Map Builder",
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Warning);
-            if (confirm != MessageBoxResult.Yes)
+            if (tmbConfirm != MessageBoxResult.Yes)
                 return;
 
             try
