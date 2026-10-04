@@ -58,7 +58,7 @@ Règles :
 
 - le bouton principal Windows du site pointe vers la dernière release stable du Launcher ;
 - Taikeron Lab reste publié sous forme de paquet/release afin que le Launcher puisse le télécharger, mais le site ne doit plus proposer son EXE comme chemin public principal ;
-- Taikeron Map Builder pourra lui aussi être installé depuis le Launcher ;
+- Taikeron Map Builder est installé depuis le Launcher via son Portable Windows x64 public, vérifié par taille + SHA-256 ;
 - Taikeron App Android reste distribuée séparément, car elle n’est pas installée par le Launcher Windows ;
 - le dépôt source `Taikeron-Launcher` peut rester privé ; le binaire stable du Launcher doit être publié sur un canal public accessible sans compte GitHub ;
 - le site ne bascule vers le Launcher qu’après publication d’une première release stable réellement téléchargeable, afin de ne jamais remplacer un lien TL fonctionnel par un lien mort.
@@ -192,3 +192,28 @@ La v0.4.0 met en place :
 - règle de distribution publique Launcher-first.
 
 La prochaine couche de durcissement sera la signature cryptographique du manifeste d’intégrité avec une clé publique embarquée dans le Launcher. Les anciennes releases sans manifeste fiable restent explicitement `non certifiées` plutôt que faussement déclarées saines.
+
+
+## TMB géré par le Launcher — v0.4.10
+
+TMB est désormais un produit géré au même niveau que TL, mais avec un mode de déploiement adapté à son artefact public :
+
+```text
+releases/tmb/stable.json
+        ↓
+windows-x64-portable
+        ↓ taille + SHA-256
+Apps/MapBuilder/Taikeron Map Builder.exe
+        ↓
+lancement / réinstallation / mise à jour / désinstallation runtime
+```
+
+Règles :
+- le Launcher préfère le Portable TMB officiel plutôt que de piloter silencieusement NSIS ;
+- le binaire est copié dans un nom canonique stable, sans modification de ses octets ;
+- l'installation gérée porte une preuve `.taikeron-installation.json` avec produit/version/SHA/taille ;
+- à version stable identique, le Launcher recalcule le SHA-256 du binaire installé et bloque son lancement s'il ne correspond plus au paquet public ;
+- une ancienne installation TMB hors `Apps/MapBuilder` est détectée comme historique/non gérée et peut être lancée, mais le bouton de mise à jour propose sa migration vers le runtime géré ;
+- la désinstallation Launcher supprime uniquement `Apps/MapBuilder` et les téléchargements temporaires TMB ;
+- le workspace TMB (par défaut dans Documents), les cartes finales et la configuration Electron restent hors du runtime et ne sont jamais supprimés ;
+- `TAIKERON_MAPS_ROOT` est transmis au processus TMB pour préparer l'alignement avec la racine Maps du Launcher, sans modifier ici le contrat de stockage interne TMB.
