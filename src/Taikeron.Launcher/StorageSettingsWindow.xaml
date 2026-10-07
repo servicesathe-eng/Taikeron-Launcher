@@ -62,7 +62,8 @@
                             <Button Grid.Column="2" Content="Parcourir" Style="{StaticResource ActionButton}" Padding="14,8" Click="BrowseVault_Click"/>
                         </Grid>
 
-                        <TextBlock Text="Cartes" FontWeight="SemiBold"/>
+                        <TextBlock Text="Cartes — bibliothèque partagée TL / TMB" FontWeight="SemiBold"/>
+                        <TextBlock Text="Quand TMB est installé par le Launcher, il produit ses .taikermap directement ici et TL les détecte automatiquement." Foreground="{StaticResource Muted}" FontSize="11" Margin="0,3,0,5" TextWrapping="Wrap"/>
                         <Grid Margin="0,5,0,12">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="8"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                             <TextBox x:Name="MapsRootBox" Style="{StaticResource PathBox}"/>

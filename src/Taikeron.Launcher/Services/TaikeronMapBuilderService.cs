@@ -381,6 +381,7 @@ public sealed class TaikeronMapBuilderService
             WorkingDirectory = Path.GetDirectoryName(executablePath)!
         };
         startInfo.Environment["TAIKERON_MAPS_ROOT"] = _settingsService.Current.MapsRoot;
+        startInfo.Environment["TAIKERON_LAUNCHER_MANAGED"] = "1";
         Process.Start(startInfo);
     }
 
