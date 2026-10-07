@@ -29,6 +29,7 @@ public partial class MainWindow : Window
     private string? _tmbInstalledExecutable;
     private string? _tmbInstalledVersion;
     private bool _backupInProgress;
+    private bool _globalTransferActive;
     private string _selectedProduct = "TL";
 
     public MainWindow()
@@ -664,25 +665,26 @@ public partial class MainWindow : Window
             return;
         }
 
-        DownloadProgress.Visibility = Visibility.Visible;
-        DownloadProgress.Value = 0;
-        SetBusy(true, $"Téléchargement de TL {_stableRelease.Version}…");
+        BeginGlobalTransfer("TL", _stableRelease.Version, $"Téléchargement de TL {_stableRelease.Version}…");
+        SetBusy(true);
 
         try
         {
             var downloadProgress = new Progress<double>(value =>
             {
-                DownloadProgress.Value = value * 100;
-                ActivityText.Text = $"Téléchargement et vérification du paquet officiel… {value:P0}";
+                ReportGlobalTransfer(
+                    value,
+                    $"Téléchargement du paquet officiel TL {_stableRelease.Version}…");
             });
 
             var packagePath = await _labService.DownloadAndVerifyAsync(_stableRelease, downloadProgress);
-            DownloadProgress.Value = 100;
-            ActivityText.Text = "Paquet vérifié. Suppression complète de l’ancienne installation avant réinstallation…";
+            SetGlobalTransferStage(
+                "Paquet TL vérifié. Remplacement propre du runtime…",
+                indeterminate: true);
 
             var workerProgress = new Progress<TlWorkerStatus>(status =>
             {
-                ActivityText.Text = status.Message;
+                SetGlobalTransferStage(status.Message, indeterminate: true);
             });
 
             var result = await _updateWorkerService.ReplaceAsync(
@@ -704,8 +706,10 @@ public partial class MainWindow : Window
                 throw new InvalidOperationException("Le worker n’a pas confirmé la suppression de l’ancien code TL.");
 
             _installedExecutable = result.ExecutablePath;
-            ActivityText.Text = "Ancien runtime supprimé. Nouveau runtime installé. Contrôle d’intégrité final…";
-            await RefreshAsync();
+            SetGlobalTransferStage(
+                "Runtime TL installé. Contrôle d’intégrité final…",
+                indeterminate: true);
+            await RefreshTlAfterTransferAsync();
 
             if (_integrityResult?.BlocksLaunch == true)
                 throw new InvalidOperationException("La réinstallation est terminée, mais le contrôle d’intégrité final a échoué. TL ne sera pas lancé.");
@@ -717,6 +721,8 @@ public partial class MainWindow : Window
                 ? "Le nouveau runtime correspond au manifeste d’intégrité officiel."
                 : "Le paquet officiel a été vérifié et installé proprement ; cette version ne dispose pas encore d’un manifeste d’intégrité fichier par fichier.";
 
+            CompleteGlobalTransfer(true, $"TL {_stableRelease.Version} installé et vérifié.");
+
             MessageBox.Show(
                 $"Taikeron Lab {_stableRelease.Version} a été installé proprement.\n\n" +
                 "L’ancien dossier code a été supprimé avant l’installation du nouveau runtime.\n" +
@@ -727,7 +733,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            DownloadProgress.Value = 0;
+            CompleteGlobalTransfer(false, $"Échec TL : {ex.Message}");
             ActivityText.Text = $"Échec : {ex.Message}";
             MessageBox.Show(ex.Message, "Échec de la mise à jour", MessageBoxButton.OK, MessageBoxImage.Error);
         }
@@ -765,24 +771,27 @@ public partial class MainWindow : Window
             return;
         }
 
-        DownloadProgress.Visibility = Visibility.Visible;
-        DownloadProgress.Value = 0;
-        SetBusy(true, $"Téléchargement de TMB {_tmbStableRelease.Version}…");
+        BeginGlobalTransfer("TMB", _tmbStableRelease.Version, $"Téléchargement de TMB {_tmbStableRelease.Version}…");
+        SetBusy(true);
 
         try
         {
             var downloadProgress = new Progress<double>(value =>
             {
-                DownloadProgress.Value = value * 100;
-                ActivityText.Text = $"Téléchargement et vérification du Portable TMB… {value:P0}";
+                ReportGlobalTransfer(
+                    value,
+                    $"Téléchargement du Portable TMB {_tmbStableRelease.Version}…");
             });
 
             var packagePath = await _tmbService.DownloadAndVerifyAsync(
                 _tmbStableRelease,
                 downloadProgress);
 
-            DownloadProgress.Value = 100;
-            var installProgress = new Progress<string>(message => ActivityText.Text = message);
+            SetGlobalTransferStage(
+                "Portable TMB vérifié. Installation du runtime…",
+                indeterminate: true);
+            var installProgress = new Progress<string>(
+                message => SetGlobalTransferStage(message, indeterminate: true));
             var executable = await _tmbService.InstallOrReplaceAsync(
                 packagePath,
                 _tmbStableRelease,
@@ -790,14 +799,17 @@ public partial class MainWindow : Window
                 installProgress);
 
             _tmbInstalledExecutable = executable;
-            ActivityText.Text = "Runtime TMB installé. Contrôle SHA-256 final…";
-            await RefreshTmbAsync(forceRemoteRefresh: true);
+            SetGlobalTransferStage(
+                "Runtime TMB installé. Contrôle SHA-256 final…",
+                indeterminate: true);
+            await RefreshTmbAfterTransferAsync();
 
             if (_tmbIntegrityResult?.BlocksLaunch == true)
                 throw new InvalidOperationException(
                     "TMB a été installé, mais le contrôle SHA-256 final a échoué.");
 
             _tmbService.Launch(executable);
+            CompleteGlobalTransfer(true, $"TMB {_tmbStableRelease.Version} installé et vérifié.");
             MessageBox.Show(
                 $"Taikeron Map Builder {_tmbStableRelease.Version} a été installé et vérifié.\n\n" +
                 $"Runtime : {_tmbService.CanonicalInstallDirectory}\n" +
@@ -808,7 +820,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            DownloadProgress.Value = 0;
+            CompleteGlobalTransfer(false, $"Échec TMB : {ex.Message}");
             ActivityText.Text = $"Échec TMB : {ex.Message}";
             MessageBox.Show(
                 ex.Message,
@@ -1049,9 +1061,123 @@ public partial class MainWindow : Window
         }
     }
 
+    private void BeginGlobalTransfer(string product, string version, string stage)
+    {
+        _globalTransferActive = true;
+        GlobalTransferPanel.Visibility = Visibility.Visible;
+        TransferProductText.Text = $"{product} {version} · mise à jour";
+        TransferStageText.Text = stage;
+        TransferPercentText.Text = "0 %";
+        DownloadProgress.IsIndeterminate = false;
+        DownloadProgress.Value = 0;
+    }
+
+    private void ReportGlobalTransfer(double value, string stage)
+    {
+        var fraction = Math.Clamp(value, 0, 1);
+        GlobalTransferPanel.Visibility = Visibility.Visible;
+        DownloadProgress.IsIndeterminate = false;
+        DownloadProgress.Value = fraction * 100;
+        TransferPercentText.Text = $"{fraction:P0}";
+        TransferStageText.Text = stage;
+    }
+
+    private void SetGlobalTransferStage(string stage, bool indeterminate = false)
+    {
+        GlobalTransferPanel.Visibility = Visibility.Visible;
+        TransferStageText.Text = stage;
+        DownloadProgress.IsIndeterminate = indeterminate;
+        TransferPercentText.Text = indeterminate ? "…" : $"{DownloadProgress.Value:0} %";
+    }
+
+    private void CompleteGlobalTransfer(bool success, string message)
+    {
+        _globalTransferActive = false;
+        GlobalTransferPanel.Visibility = Visibility.Visible;
+        DownloadProgress.IsIndeterminate = false;
+        DownloadProgress.Value = success ? 100 : 0;
+        TransferPercentText.Text = success ? "100 %" : "Échec";
+        TransferStageText.Text = message;
+    }
+
+    private async Task RefreshTlAfterTransferAsync()
+    {
+        if (string.Equals(_selectedProduct, "TL", StringComparison.OrdinalIgnoreCase))
+        {
+            await RefreshAsync(forceRemoteRefresh: true);
+            return;
+        }
+
+        _installedExecutable = _labService.FindInstalledExecutable();
+        _installedVersion = _labService.GetInstalledVersion(_installedExecutable);
+        _stableRelease = await _labService.GetStableReleaseAsync(forceRefresh: true);
+        _integrityResult = await CheckIntegrityBackgroundAsync();
+    }
+
+    private async Task<TlIntegrityCheckResult> CheckIntegrityBackgroundAsync()
+    {
+        if (_installedExecutable is null)
+        {
+            return new TlIntegrityCheckResult(
+                TlIntegrityState.NotInstalled,
+                "Taikeron Lab n’est pas installé.",
+                0,
+                0,
+                0,
+                []);
+        }
+
+        try
+        {
+            var manifest = await _integrityService.GetManifestForInstalledVersionAsync(
+                _installedVersion,
+                _stableRelease);
+            return await _integrityService.VerifyAsync(
+                _installedExecutable,
+                _installedVersion,
+                _stableRelease,
+                manifest,
+                progress: null);
+        }
+        catch (Exception ex)
+        {
+            return new TlIntegrityCheckResult(
+                TlIntegrityState.ReferenceUnavailable,
+                $"Référence d’intégrité indisponible : {ex.Message}",
+                0,
+                0,
+                0,
+                []);
+        }
+    }
+
+    private async Task RefreshTmbAfterTransferAsync()
+    {
+        if (string.Equals(_selectedProduct, "TMB", StringComparison.OrdinalIgnoreCase))
+        {
+            await RefreshTmbAsync(forceRemoteRefresh: true);
+            return;
+        }
+
+        _tmbInstalledExecutable = _tmbService.FindInstalledExecutable();
+        _tmbInstalledVersion = _tmbService.GetInstalledVersion(_tmbInstalledExecutable);
+        _tmbStableRelease = await _tmbService.GetStableReleaseAsync(forceRefresh: true);
+        _tmbIntegrityResult = await _tmbService.VerifyAsync(
+            _tmbInstalledExecutable,
+            _tmbInstalledVersion,
+            _tmbStableRelease);
+    }
+
     private void SetBusy(bool busy, string? text = null)
     {
         if (busy)
+        {
+            LaunchButton.IsEnabled = false;
+            UpdateButton.IsEnabled = false;
+            RepairActionButton.IsEnabled = false;
+            UninstallButton.IsEnabled = false;
+        }
+        else if (_globalTransferActive)
         {
             LaunchButton.IsEnabled = false;
             UpdateButton.IsEnabled = false;
