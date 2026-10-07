@@ -179,8 +179,34 @@ public sealed class TaikeronLabService
         startInfo.Environment["TAIKERON_DATA_DIR"] = _settingsService.Current.DataRoot;
         startInfo.Environment["TAIKERON_VAULT_ROOT"] = _settingsService.Current.VaultRoot;
         startInfo.Environment["TAIKERON_MAPS_ROOT"] = _settingsService.Current.MapsRoot;
+        startInfo.Environment["TAIKERON_TMB_INSTALLED"] = IsLauncherManagedTmbInstalled() ? "1" : "0";
+        if (!string.IsNullOrWhiteSpace(Environment.ProcessPath))
+            startInfo.Environment["TAIKERON_LAUNCHER_EXE"] = Environment.ProcessPath;
 
         Process.Start(startInfo);
+    }
+
+    private bool IsLauncherManagedTmbInstalled()
+    {
+        try
+        {
+            var root = Path.Combine(_settingsService.Current.AppsRoot, "MapBuilder");
+            var executable = Path.Combine(root, "Taikeron Map Builder.exe");
+            var proofPath = Path.Combine(root, ".taikeron-installation.json");
+            if (!File.Exists(executable) || !File.Exists(proofPath))
+                return false;
+
+            using var document = JsonDocument.Parse(File.ReadAllText(proofPath));
+            var node = document.RootElement;
+            var format = node.TryGetProperty("format", out var formatNode) ? formatNode.GetString() : null;
+            var product = node.TryGetProperty("product", out var productNode) ? productNode.GetString() : null;
+            return string.Equals(format, "taikeron_launcher_installation", StringComparison.Ordinal)
+                && string.Equals(product, "TMB", StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private void EnsureConfiguredDataAvailable(string executablePath)
