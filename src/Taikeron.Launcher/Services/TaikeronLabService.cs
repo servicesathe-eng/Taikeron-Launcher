@@ -179,6 +179,12 @@ public sealed class TaikeronLabService
         startInfo.Environment["TAIKERON_DATA_DIR"] = _settingsService.Current.DataRoot;
         startInfo.Environment["TAIKERON_VAULT_ROOT"] = _settingsService.Current.VaultRoot;
         startInfo.Environment["TAIKERON_MAPS_ROOT"] = _settingsService.Current.MapsRoot;
+        var tmbExecutable = Path.Combine(_settingsService.Current.AppsRoot, "MapBuilder", "Taikeron Map Builder.exe");
+        var tmbInstalled = File.Exists(tmbExecutable)
+            && File.Exists(Path.Combine(Path.GetDirectoryName(tmbExecutable)!, ".taikeron-installation.json"));
+        startInfo.Environment["TAIKERON_TMB_INSTALLED"] = tmbInstalled ? "1" : "0";
+        if (tmbInstalled)
+            startInfo.Environment["TAIKERON_TMB_EXE"] = tmbExecutable;
 
         Process.Start(startInfo);
     }
