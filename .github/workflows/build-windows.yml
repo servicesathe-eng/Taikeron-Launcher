@@ -108,6 +108,25 @@ jobs:
 
           Write-Host 'Contrat progression globale vérifié : TL/TMB partagent une barre persistante indépendante de la fiche affichée.'
 
+      - name: Verify self-update shortcut preservation
+        shell: powershell
+        run: |
+          $updater = Get-Content 'src/Taikeron.LauncherUpdater/Program.cs' -Raw
+
+          foreach ($required in @(
+            'BackupManagedShortcuts',
+            'RestoreManagedShortcuts',
+            'SpecialFolder.DesktopDirectory',
+            'SpecialFolder.Programs',
+            'Taikeron Launcher.lnk'
+          )) {
+            if ($updater -notmatch [regex]::Escape($required)) {
+              throw "Contrat raccourcis auto-update absent : $required"
+            }
+          }
+
+          Write-Host 'Contrat raccourcis vérifié : les raccourcis existants sont sauvegardés puis restaurés après auto-update.'
+
       - name: Build launcher
         run: dotnet build src/Taikeron.Launcher/Taikeron.Launcher.csproj -c Release -r win-x64 --no-restore
 
