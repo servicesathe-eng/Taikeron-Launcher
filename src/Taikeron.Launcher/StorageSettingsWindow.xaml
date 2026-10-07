@@ -64,9 +64,10 @@
 
                         <TextBlock Text="Cartes" FontWeight="SemiBold"/>
                         <Grid Margin="0,5,0,12">
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="8"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="8"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="8"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                             <TextBox x:Name="MapsRootBox" Style="{StaticResource PathBox}"/>
                             <Button Grid.Column="2" Content="Parcourir" Style="{StaticResource ActionButton}" Padding="14,8" Click="BrowseMaps_Click"/>
+                            <Button Grid.Column="4" Content="Ouvrir" Style="{StaticResource ActionButton}" Padding="14,8" Click="OpenMaps_Click"/>
                         </Grid>
 
                         <TextBlock Text="Téléchargements temporaires" FontWeight="SemiBold"/>

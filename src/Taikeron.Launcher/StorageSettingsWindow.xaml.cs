@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Windows;
 using Microsoft.Win32;
 using Taikeron.Launcher.Models;
@@ -48,6 +49,25 @@ public partial class StorageSettingsWindow : Window
     private void BrowseData_Click(object sender, RoutedEventArgs e) => BrowseInto(DataRootBox, "Dossier Data Taikeron");
     private void BrowseVault_Click(object sender, RoutedEventArgs e) => BrowseInto(VaultRootBox, "Dossier Vault Taikeron");
     private void BrowseMaps_Click(object sender, RoutedEventArgs e) => BrowseInto(MapsRootBox, "Dossier des cartes Taikeron");
+    private void OpenMaps_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var mapsRoot = LauncherSettingsService.NormalizePath(MapsRootBox.Text);
+            if (string.IsNullOrWhiteSpace(mapsRoot))
+                throw new InvalidOperationException("Le dossier des cartes n’est pas configuré.");
+            Directory.CreateDirectory(mapsRoot);
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = mapsRoot,
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(ex.Message, "Bibliothèque cartographique", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
     private void BrowseDownloads_Click(object sender, RoutedEventArgs e) => BrowseInto(DownloadsRootBox, "Dossier des téléchargements temporaires");
     private void BrowseBackup_Click(object sender, RoutedEventArgs e)
     {
