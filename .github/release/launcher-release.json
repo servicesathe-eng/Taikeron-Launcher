@@ -1,7 +1,7 @@
 {
-  "version": "0.4.12",
-  "requestedAtUtc": "2026-10-07T06:52:00Z",
+  "version": "0.4.13",
+  "requestedAtUtc": "2026-10-07T07:46:00Z",
   "channel": "stable",
   "runner": "github-hosted-windows",
-  "reason": "Launcher 0.4.12: persistent War Thunder-style global update progress bar for TL/TMB, product-independent transfer state, and safe product switching during updates"
+  "reason": "Launcher 0.4.13: preserve existing Desktop and Start Menu shortcuts across self-update without creating shortcuts the user did not already have"
 }
