@@ -15,6 +15,7 @@ internal static class Program
     {
         LauncherUpdateRequest? request = null;
         string? backupDirectory = null;
+        List<ShortcutBackup> shortcutBackups = [];
 
         try
         {
@@ -40,6 +41,8 @@ internal static class Program
 
             if (IsPathInside(stagingDirectory, installDirectory) || IsPathInside(installDirectory, stagingDirectory))
                 throw new InvalidOperationException("Le staging du Launcher doit être extérieur au dossier à remplacer.");
+
+            shortcutBackups = BackupManagedShortcuts(Path.GetDirectoryName(requestFile)!);
 
             await WaitForParentExitAsync(request.ParentProcessId);
 
@@ -72,6 +75,8 @@ internal static class Program
                     throw new InvalidDataException(
                         $"Version Launcher installée {installedVersion} différente de la cible {targetVersion}.");
                 }
+
+                RestoreManagedShortcuts(shortcutBackups);
 
                 using var launched = Process.Start(new ProcessStartInfo
                 {
@@ -110,6 +115,8 @@ internal static class Program
                         Directory.Move(backupDirectory, installDirectory);
                         backupDirectory = null;
                     }
+
+                    RestoreManagedShortcuts(shortcutBackups);
                 }
                 catch
                 {
@@ -223,6 +230,68 @@ internal static class Program
         }
     }
 
+    private static List<ShortcutBackup> BackupManagedShortcuts(string jobDirectory)
+    {
+        var backups = new List<ShortcutBackup>();
+        var backupRoot = Path.Combine(jobDirectory, "shortcut-backup");
+        Directory.CreateDirectory(backupRoot);
+
+        foreach (var candidate in ManagedShortcutCandidates())
+        {
+            try
+            {
+                if (!File.Exists(candidate.Path))
+                    continue;
+
+                var backupPath = Path.Combine(
+                    backupRoot,
+                    $"{candidate.Kind}-{Path.GetFileName(candidate.Path)}");
+                File.Copy(candidate.Path, backupPath, overwrite: true);
+                backups.Add(new ShortcutBackup(candidate.Kind, candidate.Path, backupPath));
+            }
+            catch
+            {
+                // Shortcut preservation is best-effort and must never block the update itself.
+            }
+        }
+
+        return backups;
+    }
+
+    private static void RestoreManagedShortcuts(IEnumerable<ShortcutBackup> backups)
+    {
+        foreach (var backup in backups)
+        {
+            try
+            {
+                if (!File.Exists(backup.BackupPath))
+                    continue;
+
+                var directory = Path.GetDirectoryName(backup.OriginalPath);
+                if (!string.IsNullOrWhiteSpace(directory))
+                    Directory.CreateDirectory(directory);
+
+                if (!File.Exists(backup.OriginalPath))
+                    File.Copy(backup.BackupPath, backup.OriginalPath, overwrite: false);
+            }
+            catch
+            {
+                // A missing shortcut must not turn a valid Launcher update into a rollback.
+            }
+        }
+    }
+
+    private static IEnumerable<(string Kind, string Path)> ManagedShortcutCandidates()
+    {
+        var desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+        if (!string.IsNullOrWhiteSpace(desktop))
+            yield return ("desktop", Path.Combine(desktop, "Taikeron Launcher.lnk"));
+
+        var programs = Environment.GetFolderPath(Environment.SpecialFolder.Programs);
+        if (!string.IsNullOrWhiteSpace(programs))
+            yield return ("startmenu", Path.Combine(programs, "Taikeron", "Taikeron Launcher.lnk"));
+    }
+
     private static void CopyDirectory(string source, string destination)
     {
         Directory.CreateDirectory(destination);
@@ -298,6 +367,8 @@ internal static class Program
         await File.WriteAllTextAsync(path, JsonSerializer.Serialize(value, JsonOptions));
     }
 }
+
+internal sealed record ShortcutBackup(string Kind, string OriginalPath, string BackupPath);
 
 internal sealed class LauncherUpdateRequest
 {
