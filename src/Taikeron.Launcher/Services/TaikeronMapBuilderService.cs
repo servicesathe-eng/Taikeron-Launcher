@@ -372,6 +372,7 @@ public sealed class TaikeronMapBuilderService
 
     public void Launch(string executablePath)
     {
+        _settingsService.LoadOrCreate();
         if (!File.Exists(executablePath))
             throw new FileNotFoundException("Taikeron Map Builder est introuvable.", executablePath);
 

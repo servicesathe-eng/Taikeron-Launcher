@@ -1,7 +1,7 @@
 {
-  "version": "0.4.14",
-  "requestedAtUtc": "2026-10-08T01:05:00+08:00",
+  "version": "0.4.15",
+  "requestedAtUtc": "2026-10-08T01:18:00+08:00",
   "channel": "stable",
   "runner": "github-hosted-windows",
-  "reason": "Launcher 0.4.14: shared MapsRoot contract for TL/TMB and managed TMB detection"
+  "reason": "Launcher 0.4.15: reload shared MapsRoot before launching TL/TMB"
 }
