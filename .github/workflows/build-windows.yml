@@ -91,6 +91,23 @@ jobs:
 
           Write-Host 'Contrat TMB Launcher vérifié : manifeste public, Portable x64, SHA-256, Apps/MapBuilder et UI active.'
 
+      - name: Verify global transfer progress contract
+        shell: powershell
+        run: |
+          $xaml = Get-Content 'src/Taikeron.Launcher/MainWindow.xaml' -Raw
+          $ui = Get-Content 'src/Taikeron.Launcher/MainWindow.xaml.cs' -Raw
+
+          foreach ($required in @('GlobalTransferPanel','TransferProductText','TransferPercentText','TransferStageText','DownloadProgress')) {
+            if ($xaml -notmatch [regex]::Escape($required)) { throw "UI de transfert globale absente : $required" }
+          }
+          foreach ($required in @('BeginGlobalTransfer','ReportGlobalTransfer','CompleteGlobalTransfer','RefreshTlAfterTransferAsync','RefreshTmbAfterTransferAsync')) {
+            if ($ui -notmatch [regex]::Escape($required)) { throw "Contrat de transfert global absent : $required" }
+          }
+          if ($ui -notmatch '_globalTransferActive') { throw 'Verrou de transfert global absent.' }
+          if ($ui -notmatch 'else if \(_globalTransferActive\)') { throw 'Les actions produit peuvent être réactivées pendant un transfert.' }
+
+          Write-Host 'Contrat progression globale vérifié : TL/TMB partagent une barre persistante indépendante de la fiche affichée.'
+
       - name: Build launcher
         run: dotnet build src/Taikeron.Launcher/Taikeron.Launcher.csproj -c Release -r win-x64 --no-restore
 
