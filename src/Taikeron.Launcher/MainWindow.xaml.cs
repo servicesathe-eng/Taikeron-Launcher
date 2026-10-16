@@ -454,30 +454,30 @@ public partial class MainWindow : Window
 
         try
         {
-            _tmbInstalledExecutable = _tmbService.FindInstalledExecutable();
-            _tmbInstalledVersion = _tmbService.GetInstalledVersion(_tmbInstalledExecutable);
+            _tmcInstalledExecutable = _tmcService.FindInstalledExecutable();
+            _tmcInstalledVersion = _tmcService.GetInstalledVersion(_tmcInstalledExecutable);
 
-            InstallPathText.Text = _tmbInstalledExecutable is null
-                ? $"TMC non détecté. Emplacement canonique prévu : {_tmbService.CanonicalInstallDirectory}"
-                : _tmbInstalledExecutable;
-            InstalledVersionText.Text = _tmbInstalledVersion ?? "Non installé";
+            InstallPathText.Text = _tmcInstalledExecutable is null
+                ? $"TMC non détecté. Emplacement canonique prévu : {_tmcService.CanonicalInstallDirectory}"
+                : _tmcInstalledExecutable;
+            InstalledVersionText.Text = _tmcInstalledVersion ?? "Non installé";
 
-            _tmbStableRelease = await _tmbService.GetStableReleaseAsync(forceRemoteRefresh);
-            LatestVersionText.Text = string.IsNullOrWhiteSpace(_tmbStableRelease?.Version)
+            _tmcStableRelease = await _tmcService.GetStableReleaseAsync(forceRemoteRefresh);
+            LatestVersionText.Text = string.IsNullOrWhiteSpace(_tmcStableRelease?.Version)
                 ? "—"
-                : _tmbStableRelease.Version;
+                : _tmcStableRelease.Version;
             VersionCardValue.Text = LatestVersionText.Text;
-            DownloadSizeText.Text = _tmbStableRelease is null
+            DownloadSizeText.Text = _tmcStableRelease is null
                 ? "Taille : —"
-                : $"Taille : {FormatBytes(_tmbStableRelease.Bytes)}";
-            VersionDateText.Text = _tmbStableRelease?.PublishedAt is null
+                : $"Taille : {FormatBytes(_tmcStableRelease.Bytes)}";
+            VersionDateText.Text = _tmcStableRelease?.PublishedAt is null
                 ? "Publication : —"
-                : $"Publication : {_tmbStableRelease.PublishedAt.Value.LocalDateTime:dd/MM/yyyy HH:mm}";
+                : $"Publication : {_tmcStableRelease.PublishedAt.Value.LocalDateTime:dd/MM/yyyy HH:mm}";
 
-            _tmbIntegrityResult = await _tmbService.VerifyAsync(
-                _tmbInstalledExecutable,
-                _tmbInstalledVersion,
-                _tmbStableRelease);
+            _tmcIntegrityResult = await _tmcService.VerifyAsync(
+                _tmcInstalledExecutable,
+                _tmcInstalledVersion,
+                _tmcStableRelease);
             ApplyTmcTruthStatus();
         }
         catch (Exception ex)
@@ -500,12 +500,12 @@ public partial class MainWindow : Window
 
     private void ApplyTmcTruthStatus()
     {
-        var updateAvailable = _tmbService.IsUpdateAvailable(
-            _tmbInstalledVersion,
-            _tmbStableRelease?.Version);
-        var installed = _tmbInstalledExecutable is not null;
-        var blocked = _tmbIntegrityResult?.BlocksLaunch == true;
-        var managed = _tmbService.IsLauncherManaged(_tmbInstalledExecutable);
+        var updateAvailable = _tmcService.IsUpdateAvailable(
+            _tmcInstalledVersion,
+            _tmcStableRelease?.Version);
+        var installed = _tmcInstalledExecutable is not null;
+        var blocked = _tmcIntegrityResult?.BlocksLaunch == true;
+        var managed = _tmcService.IsLauncherManaged(_tmcInstalledExecutable);
 
         UpdateBadge.Visibility = updateAvailable || blocked || (installed && !managed)
             ? Visibility.Visible
@@ -521,31 +521,31 @@ public partial class MainWindow : Window
         RepairActionButton.IsEnabled = true;
         UninstallButton.IsEnabled = managed;
 
-        if (!installed || _tmbIntegrityResult?.State == TmcIntegrityState.NotInstalled)
+        if (!installed || _tmcIntegrityResult?.State == TmcIntegrityState.NotInstalled)
         {
             StatusDot.Fill = Brushes.DarkOrange;
             StatusText.Foreground = Brushes.DarkOrange;
             StatusText.Text = "Non installé";
             ShaStatusText.Text = "Intégrité : non applicable";
             FooterInstallStateText.Text = "◉  TMC non installé";
-            ActivityText.Text = $"TMC pourra être installé dans {_tmbService.CanonicalInstallDirectory}.";
+            ActivityText.Text = $"TMC pourra être installé dans {_tmcService.CanonicalInstallDirectory}.";
             ApplyTmcLaunchButtonState(updateAvailable);
             return;
         }
 
-        if (_tmbIntegrityResult?.State == TmcIntegrityState.Corrupted)
+        if (_tmcIntegrityResult?.State == TmcIntegrityState.Corrupted)
         {
             StatusDot.Fill = Brushes.OrangeRed;
             StatusText.Foreground = Brushes.OrangeRed;
             StatusText.Text = "Installation TMC altérée";
             ShaStatusText.Text = "SHA-256 TMC : ÉCHEC";
             FooterInstallStateText.Text = "⚠  Installation TMC à réparer";
-            ActivityText.Text = _tmbIntegrityResult.Message;
+            ActivityText.Text = _tmcIntegrityResult.Message;
             ApplyTmcLaunchButtonState(updateAvailable);
             return;
         }
 
-        if (_tmbIntegrityResult?.State == TmcIntegrityState.Healthy)
+        if (_tmcIntegrityResult?.State == TmcIntegrityState.Healthy)
         {
             StatusDot.Fill = (Brush)FindResource("Green");
             StatusText.Foreground = (Brush)FindResource("Green");
@@ -554,12 +554,12 @@ public partial class MainWindow : Window
             FooterInstallStateText.Text = "✓  Installation TMC vérifiée";
             ActivityText.Text = updateAvailable
                 ? "Runtime TMC vérifié. Une version plus récente est disponible."
-                : _tmbIntegrityResult.Message;
+                : _tmcIntegrityResult.Message;
             ApplyTmcLaunchButtonState(updateAvailable);
             return;
         }
 
-        if (_tmbIntegrityResult?.State == TmcIntegrityState.LegacyUnmanaged)
+        if (_tmcIntegrityResult?.State == TmcIntegrityState.LegacyUnmanaged)
         {
             StatusDot.Fill = Brushes.DarkOrange;
             StatusText.Foreground = Brushes.DarkOrange;
@@ -576,20 +576,20 @@ public partial class MainWindow : Window
         StatusText.Text = updateAvailable ? "Installé · mise à jour disponible" : "Installé · référence incomplète";
         ShaStatusText.Text = "Intégrité : référence locale non comparable";
         FooterInstallStateText.Text = "◉  Installation TMC non certifiée";
-        ActivityText.Text = _tmbIntegrityResult?.Message ?? "Impossible de certifier le runtime TMC.";
+        ActivityText.Text = _tmcIntegrityResult?.Message ?? "Impossible de certifier le runtime TMC.";
         ApplyTmcLaunchButtonState(updateAvailable);
     }
 
     private void ApplyTmcLaunchButtonState(bool updateAvailable)
     {
-        var installed = _tmbInstalledExecutable is not null;
-        var blocked = _tmbIntegrityResult?.BlocksLaunch == true;
-        var managed = _tmbService.IsLauncherManaged(_tmbInstalledExecutable);
+        var installed = _tmcInstalledExecutable is not null;
+        var blocked = _tmcIntegrityResult?.BlocksLaunch == true;
+        var managed = _tmcService.IsLauncherManaged(_tmcInstalledExecutable);
         var ready = installed && !blocked && (!managed || !updateAvailable);
 
         LaunchButton.Style = (Style)FindResource(ready ? "GoldButton" : "ActionButton");
-        LaunchButton.IsEnabled = ready || _tmbStableRelease is not null;
-        UpdateButton.IsEnabled = _tmbStableRelease is not null;
+        LaunchButton.IsEnabled = ready || _tmcStableRelease is not null;
+        UpdateButton.IsEnabled = _tmcStableRelease is not null;
 
         if (!installed)
         {
@@ -752,12 +752,12 @@ public partial class MainWindow : Window
     {
         if (string.Equals(_selectedProduct, "TMC", StringComparison.OrdinalIgnoreCase))
         {
-            var tmbUpdateAvailable = _tmbService.IsUpdateAvailable(
-                _tmbInstalledVersion,
-                _tmbStableRelease?.Version);
-            var managed = _tmbService.IsLauncherManaged(_tmbInstalledExecutable);
-            var ready = _tmbInstalledExecutable is not null
-                && _tmbIntegrityResult?.BlocksLaunch != true
+            var tmbUpdateAvailable = _tmcService.IsUpdateAvailable(
+                _tmcInstalledVersion,
+                _tmcStableRelease?.Version);
+            var managed = _tmcService.IsLauncherManaged(_tmcInstalledExecutable);
+            var ready = _tmcInstalledExecutable is not null
+                && _tmcIntegrityResult?.BlocksLaunch != true
                 && (!managed || !tmbUpdateAvailable);
 
             if (!ready)
@@ -768,7 +768,7 @@ public partial class MainWindow : Window
 
             try
             {
-                _tmbService.Launch(_tmbInstalledExecutable!);
+                _tmcService.Launch(_tmcInstalledExecutable!);
                 ActivityText.Text = "Taikeron Map Chooser lancé.";
             }
             catch (Exception ex)
@@ -1090,7 +1090,7 @@ public partial class MainWindow : Window
             _settingsService.EnsureConfiguredDirectories();
         }
 
-        if (_tmbStableRelease is null)
+        if (_tmcStableRelease is null)
         {
             MessageBox.Show(
                 "Aucune release stable TMC n’est chargée.",
@@ -1100,7 +1100,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        BeginGlobalTransfer("TMC", _tmbStableRelease.Version, $"Téléchargement de TMC {_tmbStableRelease.Version}…");
+        BeginGlobalTransfer("TMC", _tmcStableRelease.Version, $"Téléchargement de TMC {_tmcStableRelease.Version}…");
         SetBusy(true);
 
         try
@@ -1109,11 +1109,11 @@ public partial class MainWindow : Window
             {
                 ReportGlobalTransfer(
                     value,
-                    $"Téléchargement du Portable TMC {_tmbStableRelease.Version}…");
+                    $"Téléchargement du Portable TMC {_tmcStableRelease.Version}…");
             });
 
-            var packagePath = await _tmbService.DownloadAndVerifyAsync(
-                _tmbStableRelease,
+            var packagePath = await _tmcService.DownloadAndVerifyAsync(
+                _tmcStableRelease,
                 downloadProgress);
 
             SetGlobalTransferStage(
@@ -1121,27 +1121,27 @@ public partial class MainWindow : Window
                 indeterminate: true);
             var installProgress = new Progress<string>(
                 message => SetGlobalTransferStage(message, indeterminate: true));
-            var executable = await _tmbService.InstallOrReplaceAsync(
+            var executable = await _tmcService.InstallOrReplaceAsync(
                 packagePath,
-                _tmbStableRelease,
-                _tmbInstalledExecutable,
+                _tmcStableRelease,
+                _tmcInstalledExecutable,
                 installProgress);
 
-            _tmbInstalledExecutable = executable;
+            _tmcInstalledExecutable = executable;
             SetGlobalTransferStage(
                 "Runtime TMC installé. Contrôle SHA-256 final…",
                 indeterminate: true);
             await RefreshTmcAfterTransferAsync();
 
-            if (_tmbIntegrityResult?.BlocksLaunch == true)
+            if (_tmcIntegrityResult?.BlocksLaunch == true)
                 throw new InvalidOperationException(
                     "TMC a été installé, mais le contrôle SHA-256 final a échoué.");
 
-            _tmbService.Launch(executable);
-            CompleteGlobalTransfer(true, $"TMC {_tmbStableRelease.Version} installé et vérifié.");
+            _tmcService.Launch(executable);
+            CompleteGlobalTransfer(true, $"TMC {_tmcStableRelease.Version} installé et vérifié.");
             MessageBox.Show(
-                $"Taikeron Map Chooser {_tmbStableRelease.Version} a été installé et vérifié.\n\n" +
-                $"Runtime : {_tmbService.CanonicalInstallDirectory}\n" +
+                $"Taikeron Map Chooser {_tmcStableRelease.Version} a été installé et vérifié.\n\n" +
+                $"Runtime : {_tmcService.CanonicalInstallDirectory}\n" +
                 "La bibliothèque Maps partagée est conservée.",
                 "Installation TMC terminée",
                 MessageBoxButton.OK,
@@ -1167,7 +1167,7 @@ public partial class MainWindow : Window
     {
         if (string.Equals(_selectedProduct, "TMC", StringComparison.OrdinalIgnoreCase))
         {
-            if (!_tmbService.IsLauncherManaged(_tmbInstalledExecutable))
+            if (!_tmcService.IsLauncherManaged(_tmcInstalledExecutable))
             {
                 MessageBox.Show(
                     "Cette installation TMC n’est pas gérée par le Launcher. Elle ne sera pas supprimée automatiquement.",
@@ -1190,10 +1190,10 @@ public partial class MainWindow : Window
             {
                 SetBusy(true, "Désinstallation du runtime TMC…");
                 var progress = new Progress<string>(message => ActivityText.Text = message);
-                var removed = await _tmbService.UninstallAsync(_tmbInstalledExecutable, progress);
-                _tmbInstalledExecutable = null;
-                _tmbInstalledVersion = null;
-                _tmbIntegrityResult = null;
+                var removed = await _tmcService.UninstallAsync(_tmcInstalledExecutable, progress);
+                _tmcInstalledExecutable = null;
+                _tmcInstalledVersion = null;
+                _tmcIntegrityResult = null;
                 await RefreshTmcAsync(forceRemoteRefresh: true);
                 MessageBox.Show(
                     $"Runtime TMC supprimé :\n{removed}\n\nWorkspace et cartes conservés.",
@@ -1372,11 +1372,11 @@ public partial class MainWindow : Window
         if (string.Equals(_selectedProduct, "TMC", StringComparison.OrdinalIgnoreCase))
         {
             await RefreshTmcAsync(forceRemoteRefresh: true);
-            var integrity = _tmbIntegrityResult?.Message ?? "État d’intégrité inconnu.";
-            var location = _tmbInstalledExecutable ?? _tmbService.CanonicalInstallDirectory;
+            var integrity = _tmcIntegrityResult?.Message ?? "État d’intégrité inconnu.";
+            var location = _tmcInstalledExecutable ?? _tmcService.CanonicalInstallDirectory;
             MessageBox.Show(
                 $"Installation :\n{location}\n\n" +
-                $"Version : {_tmbInstalledVersion ?? "non installée"}\n\n" +
+                $"Version : {_tmcInstalledVersion ?? "non installée"}\n\n" +
                 $"État Launcher :\n{integrity}\n\n" +
                 "Réinstaller TMC remplace uniquement le runtime géré ; workspace et cartes sont conservés.",
                 "Diagnostic TMC",
@@ -1585,13 +1585,13 @@ public partial class MainWindow : Window
             return;
         }
 
-        _tmbInstalledExecutable = _tmbService.FindInstalledExecutable();
-        _tmbInstalledVersion = _tmbService.GetInstalledVersion(_tmbInstalledExecutable);
-        _tmbStableRelease = await _tmbService.GetStableReleaseAsync(forceRefresh: true);
-        _tmbIntegrityResult = await _tmbService.VerifyAsync(
-            _tmbInstalledExecutable,
-            _tmbInstalledVersion,
-            _tmbStableRelease);
+        _tmcInstalledExecutable = _tmcService.FindInstalledExecutable();
+        _tmcInstalledVersion = _tmcService.GetInstalledVersion(_tmcInstalledExecutable);
+        _tmcStableRelease = await _tmcService.GetStableReleaseAsync(forceRefresh: true);
+        _tmcIntegrityResult = await _tmcService.VerifyAsync(
+            _tmcInstalledExecutable,
+            _tmcInstalledVersion,
+            _tmcStableRelease);
     }
 
     private void SetBusy(bool busy, string? text = null)
@@ -1621,12 +1621,12 @@ public partial class MainWindow : Window
         }
         else if (string.Equals(_selectedProduct, "TMC", StringComparison.OrdinalIgnoreCase))
         {
-            var updateAvailable = _tmbService.IsUpdateAvailable(
-                _tmbInstalledVersion,
-                _tmbStableRelease?.Version);
+            var updateAvailable = _tmcService.IsUpdateAvailable(
+                _tmcInstalledVersion,
+                _tmcStableRelease?.Version);
             ApplyTmcLaunchButtonState(updateAvailable);
             RepairActionButton.IsEnabled = true;
-            UninstallButton.IsEnabled = _tmbService.IsLauncherManaged(_tmbInstalledExecutable);
+            UninstallButton.IsEnabled = _tmcService.IsLauncherManaged(_tmcInstalledExecutable);
         }
         else
         {
