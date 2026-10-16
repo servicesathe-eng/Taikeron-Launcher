@@ -91,6 +91,18 @@ jobs:
 
           Write-Host 'Contrat TMB Launcher vérifié : manifeste public, Portable x64, SHA-256, Apps/MapBuilder et UI active.'
 
+      - name: Verify TMC Launcher integration contract
+        shell: powershell
+        run: |
+          $ui = Get-Content 'src/Taikeron.Launcher/MainWindow.xaml.cs' -Raw
+          $xaml = Get-Content 'src/Taikeron.Launcher/MainWindow.xaml' -Raw
+          $service = Get-Content 'src/Taikeron.Launcher/Services/TaikeronMapChooserService.cs' -Raw
+          $model = Get-Content 'src/Taikeron.Launcher/Models/TmcReleaseManifest.cs' -Raw
+          foreach ($name in @('TmcProductCard','TaikeronMapChooserMark.png')) { if ($xaml -notmatch [regex]::Escape($name)) { throw "TMC UI missing $name" } }
+          foreach ($name in @('RefreshTmcAsync','InstallOrUpdateTmcAsync','ApplyTmcIdentity')) { if ($ui -notmatch [regex]::Escape($name)) { throw "TMC lifecycle missing $name" } }
+          foreach ($name in @('releases/tmc/stable.json','TAIKERON_MAPS_ROOT','MapChooser','ComputeSha256Async')) { if ($service -notmatch [regex]::Escape($name)) { throw "TMC service missing $name" } }
+          if ($model -notmatch 'windows-x64-portable') { throw 'TMC portable manifest missing' }
+
       - name: Verify global transfer progress contract
         shell: powershell
         run: |

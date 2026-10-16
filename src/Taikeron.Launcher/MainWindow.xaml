@@ -106,18 +106,19 @@
                         </Grid>
                     </Border>
 
-                    <Border Grid.Row="2" Background="#091923" BorderBrush="#253B49" BorderThickness="1" CornerRadius="7" Padding="12">
+                    <Border x:Name="TmcProductCard" Grid.Row="2" Tag="TMC" Background="#091923" BorderBrush="#253B49" BorderThickness="1" CornerRadius="7" Padding="12" Margin="0,0,0,8" Cursor="Hand" MouseLeftButtonUp="ProductCard_MouseLeftButtonUp">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="48"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <Border Width="40" Height="40" CornerRadius="20" BorderBrush="#7C8993" BorderThickness="1">
-                                <TextBlock Text="+" FontSize="23" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                            </Border>
+                            <Image Source="Assets/TaikeronMapChooserMark.png"
+                                   Width="44" Height="44"
+                                   Stretch="Uniform"
+                                   VerticalAlignment="Center"/>
                             <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                <TextBlock Text="Bientôt plus d’outils" FontWeight="SemiBold" FontSize="13"/>
-                                <TextBlock Text="L’écosystème s’agrandit" Foreground="{StaticResource Muted}" FontSize="12" Margin="0,3,0,0"/>
+                                <TextBlock Text="Taikeron Map Chooser (TMC)" FontWeight="SemiBold" FontSize="13" TextWrapping="Wrap"/>
+                                <TextBlock Text="Choix des zones cartographiques" Foreground="{StaticResource Muted}" FontSize="12" Margin="0,3,0,0"/>
                             </StackPanel>
                         </Grid>
                     </Border>
