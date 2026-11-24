@@ -1,0 +1,12 @@
+{
+  "schema": "taikeron.language-binding.v1",
+  "productId": "Launcher",
+  "repository": "servicesathe-eng/Taikeron-Launcher",
+  "registryVersion": "1.2.0",
+  "lockBlobSha": "1230f942b86f003074c41c6f1d135dad7e9bcecd",
+  "contractIds": [
+    "distribution.manifests",
+    "maps.format",
+    "map.catalog"
+  ]
+}
