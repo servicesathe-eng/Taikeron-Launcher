@@ -72,6 +72,7 @@ public partial class FirstInstallWindow : Window
             var current = _settingsService.Current;
             var settings = new LauncherSettings
             {
+                TlReleaseChannel = current.TlReleaseChannel,
                 AppsRoot = apps,
                 DataRoot = data,
                 VaultRoot = vault,

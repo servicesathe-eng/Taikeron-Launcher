@@ -240,7 +240,17 @@
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="◉  Canal stable" Foreground="{StaticResource Muted}"/>
+                            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="Canal : " Foreground="{StaticResource Muted}" VerticalAlignment="Center"/>
+                                <ComboBox x:Name="TlChannelSelector" Width="105" SelectedIndex="0"
+                                          SelectionChanged="TlChannelSelector_SelectionChanged"
+                                          ToolTip="Canal de distribution de Taikeron Lab">
+                                    <ComboBoxItem Content="Stable"/>
+                                    <ComboBoxItem Content="Bêta"/>
+                                </ComboBox>
+                                <TextBlock x:Name="FixedChannelText" Text="Stable" Visibility="Collapsed"
+                                           Foreground="{StaticResource Muted}" VerticalAlignment="Center"/>
+                            </StackPanel>
                             <TextBlock x:Name="FooterInstallStateText" Grid.Column="1" Text="◉  État TL en cours de vérification" Foreground="{StaticResource Muted}" HorizontalAlignment="Center"/>
                             <TextBlock Grid.Column="2" Text="◉  Données séparées du code" Foreground="{StaticResource Muted}" HorizontalAlignment="Right"/>
                         </Grid>

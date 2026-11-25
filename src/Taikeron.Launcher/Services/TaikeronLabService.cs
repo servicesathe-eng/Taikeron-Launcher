@@ -10,6 +10,7 @@ namespace Taikeron.Launcher.Services;
 public sealed class TaikeronLabService
 {
     public const string StableManifestUrl = "https://taikeron-cyclingos.github.io/releases/tl/stable.json";
+    public const string BetaManifestUrl = "https://taikeron-cyclingos.github.io/releases/tl/beta.json";
 
     private readonly LauncherSettingsService _settingsService;
     private readonly HttpClient _httpClient = new()
@@ -101,13 +102,25 @@ public sealed class TaikeronLabService
     public Task<TlReleaseManifest?> GetStableReleaseAsync(CancellationToken cancellationToken = default) =>
         GetStableReleaseAsync(forceRefresh: false, cancellationToken);
 
-    public async Task<TlReleaseManifest?> GetStableReleaseAsync(
+    public Task<TlReleaseManifest?> GetStableReleaseAsync(
         bool forceRefresh,
+        CancellationToken cancellationToken = default) =>
+        GetReleaseAsync("stable", forceRefresh, cancellationToken);
+
+    public async Task<TlReleaseManifest?> GetReleaseAsync(
+        string channel,
+        bool forceRefresh = false,
         CancellationToken cancellationToken = default)
     {
+        var manifestUrl = channel switch
+        {
+            "stable" => StableManifestUrl,
+            "beta" => BetaManifestUrl,
+            _ => throw new ArgumentOutOfRangeException(nameof(channel))
+        };
         var requestUrl = forceRefresh
-            ? $"{StableManifestUrl}?refresh={DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}"
-            : StableManifestUrl;
+            ? $"{manifestUrl}?refresh={DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}"
+            : manifestUrl;
 
         using var request = new HttpRequestMessage(HttpMethod.Get, requestUrl);
         if (forceRefresh)
@@ -132,11 +145,18 @@ public sealed class TaikeronLabService
             PropertyNameCaseInsensitive = true
         }, cancellationToken);
 
-        if (manifest is null || !manifest.Available || manifest.WindowsX64 is null)
-            return manifest;
+        if (manifest is null)
+            return null;
+        if (!string.Equals(manifest.Product, "TL", StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(manifest.Channel, channel, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException("Le manifeste TL ne correspond pas au produit ou au canal demandé.");
+        if (!manifest.Available)
+            return null;
 
-        if (string.IsNullOrWhiteSpace(manifest.Url) || string.IsNullOrWhiteSpace(manifest.Sha256))
-            throw new InvalidDataException("Le manifeste stable TL ne contient pas de paquet windows-x64 vérifiable.");
+        if (manifest.WindowsX64 is null || !Version.TryParse(manifest.Version, out _) ||
+            string.IsNullOrWhiteSpace(manifest.Url) || manifest.Sha256.Length != 64 ||
+            !manifest.Sha256.All(Uri.IsHexDigit) || manifest.Bytes <= 0)
+            throw new InvalidDataException("Le manifeste TL ne contient pas de paquet windows-x64 vérifiable.");
 
         return manifest;
     }

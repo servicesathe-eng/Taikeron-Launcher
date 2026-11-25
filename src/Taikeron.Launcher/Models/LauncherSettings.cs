@@ -16,6 +16,8 @@ public sealed class LauncherSettings
     public string DownloadsRoot { get; set; } = string.Empty;
     public string BackupRoot { get; set; } = string.Empty;
 
+    public string TlReleaseChannel { get; set; } = "stable";
+
     public bool InitialSetupCompleted { get; set; }
 
     public bool AutomaticBackupEnabled { get; set; }

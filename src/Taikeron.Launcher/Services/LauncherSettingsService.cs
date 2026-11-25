@@ -146,6 +146,7 @@ public sealed class LauncherSettingsService
     private static void ApplyMissingDefaults(LauncherSettings settings)
     {
         var defaults = LauncherSettings.CreateDefault();
+        settings.TlReleaseChannel = string.Equals(settings.TlReleaseChannel, "beta", StringComparison.OrdinalIgnoreCase) ? "beta" : "stable";
 
         settings.AppsRoot = string.IsNullOrWhiteSpace(settings.AppsRoot)
             ? defaults.AppsRoot

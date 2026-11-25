@@ -20,7 +20,7 @@ public partial class MainWindow : Window
     private readonly TlUpdateWorkerService _updateWorkerService;
     private readonly DispatcherTimer _backupTimer;
 
-    private TlReleaseManifest? _stableRelease;
+    private TlReleaseManifest? _tlRelease;
     private TmbReleaseManifest? _tmbStableRelease;
     private TmcReleaseManifest? _tmcStableRelease;
     private LauncherReleaseInfo? _launcherRelease;
@@ -35,6 +35,8 @@ public partial class MainWindow : Window
     private string? _tmcInstalledVersion;
     private bool _backupInProgress;
     private bool _globalTransferActive;
+    private bool _uiBusy;
+    private bool _channelReady;
     private string _selectedProduct = "TL";
 
     public MainWindow()
@@ -47,6 +49,8 @@ public partial class MainWindow : Window
         _backupTimer.Tick += async (_, _) => await CheckAutomaticBackupAsync();
 
         InitializeComponent();
+        TlChannelSelector.SelectedIndex = _settingsService.Current.TlReleaseChannel == "beta" ? 1 : 0;
+        _channelReady = true;
         Loaded += async (_, _) =>
         {
             LauncherVersionText.Text = $"v{_launcherSelfUpdateService.CurrentVersion}";
@@ -67,12 +71,17 @@ public partial class MainWindow : Window
         if (sender is not FrameworkElement element || element.Tag is not string product)
             return;
 
+        if (_uiBusy && !_globalTransferActive)
+            return;
         await SelectProductAsync(product);
     }
 
     private async Task SelectProductAsync(string product)
     {
         _selectedProduct = product;
+        var isTl = string.Equals(product, "TL", StringComparison.OrdinalIgnoreCase);
+        TlChannelSelector.Visibility = isTl ? Visibility.Visible : Visibility.Collapsed;
+        FixedChannelText.Visibility = isTl ? Visibility.Collapsed : Visibility.Visible;
         ApplySidebarSelection();
 
         if (string.Equals(product, "TMC", StringComparison.OrdinalIgnoreCase))
@@ -223,6 +232,42 @@ public partial class MainWindow : Window
         }
     }
 
+    private async void TlChannelSelector_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        if (!_channelReady || _uiBusy || _globalTransferActive ||
+            !string.Equals(_selectedProduct, "TL", StringComparison.OrdinalIgnoreCase))
+            return;
+
+        var settings = _settingsService.Current;
+        var previous = settings.TlReleaseChannel;
+        var selected = TlChannelSelector.SelectedIndex == 1 ? "beta" : "stable";
+        if (previous == selected)
+            return;
+
+        try
+        {
+            settings.TlReleaseChannel = selected;
+            _settingsService.Save(settings);
+        }
+        catch (Exception ex)
+        {
+            settings.TlReleaseChannel = previous;
+            _channelReady = false;
+            TlChannelSelector.SelectedIndex = previous == "beta" ? 1 : 0;
+            _channelReady = true;
+            MessageBox.Show(ex.Message, "Impossible de mémoriser le canal", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        _tlRelease = null;
+        await RefreshAsync(forceRemoteRefresh: true);
+    }
+
+    // A return to an older channel requires explicit confirmation.
+    private bool TlDowngradeAvailable =>
+        _tlRelease is not null && !string.IsNullOrWhiteSpace(_installedVersion) &&
+        _labService.IsUpdateAvailable(_tlRelease.Version, _installedVersion);
+
     private async Task RefreshAsync(bool forceRemoteRefresh = false)
     {
         if (string.Equals(_selectedProduct, "TMC", StringComparison.OrdinalIgnoreCase))
@@ -237,6 +282,7 @@ public partial class MainWindow : Window
         }
 
         SetBusy(true, "Vérification de Taikeron Lab…");
+        _tlRelease = null;
 
         try
         {
@@ -249,13 +295,13 @@ public partial class MainWindow : Window
 
             InstalledVersionText.Text = _installedVersion ?? "Non installé";
 
-            _stableRelease = await _labService.GetStableReleaseAsync(forceRemoteRefresh);
-            LatestVersionText.Text = string.IsNullOrWhiteSpace(_stableRelease?.Version) ? "—" : _stableRelease.Version;
+            _tlRelease = await _labService.GetReleaseAsync(_settingsService.Current.TlReleaseChannel, forceRemoteRefresh);
+            LatestVersionText.Text = string.IsNullOrWhiteSpace(_tlRelease?.Version) ? "—" : _tlRelease.Version;
             VersionCardValue.Text = LatestVersionText.Text;
-            DownloadSizeText.Text = _stableRelease is null ? "Taille : —" : $"Taille : {FormatBytes(_stableRelease.Bytes)}";
-            VersionDateText.Text = _stableRelease?.PublishedAt is null
+            DownloadSizeText.Text = _tlRelease is null ? "Taille : —" : $"Taille : {FormatBytes(_tlRelease.Bytes)}";
+            VersionDateText.Text = _tlRelease?.PublishedAt is null
                 ? "Publication : —"
-                : $"Publication : {_stableRelease.PublishedAt.Value.LocalDateTime:dd/MM/yyyy HH:mm}";
+                : $"Publication : {_tlRelease.PublishedAt.Value.LocalDateTime:dd/MM/yyyy HH:mm}";
 
             _integrityResult = await CheckIntegrityAsync();
             ApplyTruthStatus();
@@ -634,7 +680,7 @@ public partial class MainWindow : Window
         try
         {
             ActivityText.Text = "Lecture de la référence d’intégrité officielle…";
-            var manifest = await _integrityService.GetManifestForInstalledVersionAsync(_installedVersion, _stableRelease);
+            var manifest = await _integrityService.GetManifestForInstalledVersionAsync(_installedVersion, _tlRelease);
             var progress = new Progress<double>(value =>
             {
                 ActivityText.Text = $"Vérification locale du code TL… {value:P0}";
@@ -643,7 +689,7 @@ public partial class MainWindow : Window
             return await _integrityService.VerifyAsync(
                 _installedExecutable,
                 _installedVersion,
-                _stableRelease,
+                _tlRelease,
                 manifest,
                 progress);
         }
@@ -661,10 +707,10 @@ public partial class MainWindow : Window
 
     private void ApplyTruthStatus()
     {
-        var updateAvailable = _labService.IsUpdateAvailable(_installedVersion, _stableRelease?.Version);
-        UpdateButton.IsEnabled = _stableRelease is not null;
-        UpdateBadge.Visibility = updateAvailable ? Visibility.Visible : Visibility.Collapsed;
-        UpdateBadgeText.Text = updateAvailable ? "Mise à jour disponible" : "";
+        var updateAvailable = _labService.IsUpdateAvailable(_installedVersion, _tlRelease?.Version);
+        UpdateButton.IsEnabled = _tlRelease is not null;
+        UpdateBadge.Visibility = updateAvailable || TlDowngradeAvailable ? Visibility.Visible : Visibility.Collapsed;
+        UpdateBadgeText.Text = TlDowngradeAvailable ? "Version du canal plus ancienne" : updateAvailable ? "Mise à jour disponible" : "";
         ApplyLaunchButtonState(updateAvailable);
         UninstallButton.IsEnabled = true;
 
@@ -701,12 +747,13 @@ public partial class MainWindow : Window
         {
             StatusDot.Fill = (Brush)FindResource("Green");
             StatusText.Foreground = (Brush)FindResource("Green");
-            StatusText.Text = updateAvailable ? "Installé · intact" : "Installé · intact · à jour";
-            UpdateButton.Content = updateAvailable ? "↻  Réinstaller la dernière version" : "↻  Réinstaller proprement";
+            StatusText.Text = TlDowngradeAvailable ? "Installé · intact · plus récent que le canal" : updateAvailable ? "Installé · intact" : "Installé · intact · à jour";
+            UpdateButton.Content = TlDowngradeAvailable ? "↶  Installer la version du canal" : updateAvailable ? "↻  Réinstaller la dernière version" : "↻  Réinstaller proprement";
             ShaStatusText.Text = $"Intégrité vérifiée · {_integrityResult.CheckedFiles} SHA-256";
             FooterInstallStateText.Text = "✓  Installation TL vérifiée";
-            ActivityText.Text = updateAvailable
-                ? $"{_integrityResult.Message} Une version plus récente est disponible."
+            ActivityText.Text = TlDowngradeAvailable
+                ? $"{_integrityResult.Message} Le canal sélectionné propose une version plus ancienne."
+                : updateAvailable ? $"{_integrityResult.Message} Une version plus récente est disponible."
                 : _integrityResult.Message;
             return;
         }
@@ -715,7 +762,7 @@ public partial class MainWindow : Window
         StatusText.Foreground = Brushes.DarkOrange;
         StatusText.Text = updateAvailable ? "Installé · non certifié" : "Installé · référence incomplète";
         LaunchButton.IsEnabled = true;
-        UpdateButton.Content = updateAvailable ? "↻  Réinstaller la dernière version" : "↻  Réinstaller proprement";
+        UpdateButton.Content = TlDowngradeAvailable ? "↶  Installer la version du canal" : updateAvailable ? "↻  Réinstaller la dernière version" : "↻  Réinstaller proprement";
         ShaStatusText.Text = "Intégrité : référence indisponible";
         FooterInstallStateText.Text = "◉  Installation TL non certifiée";
         ActivityText.Text = _integrityResult?.Message ?? "Impossible de certifier les fichiers locaux.";
@@ -728,7 +775,7 @@ public partial class MainWindow : Window
         var readyForLatest = installed && !blocked && !updateAvailable;
 
         LaunchButton.Style = (Style)FindResource(readyForLatest ? "GoldButton" : "ActionButton");
-        LaunchButton.IsEnabled = readyForLatest || _stableRelease is not null;
+        LaunchButton.IsEnabled = readyForLatest || _tlRelease is not null;
 
         if (readyForLatest)
         {
@@ -809,7 +856,7 @@ public partial class MainWindow : Window
         if (!string.Equals(_selectedProduct, "TL", StringComparison.OrdinalIgnoreCase))
             return;
 
-        var updateAvailable = _labService.IsUpdateAvailable(_installedVersion, _stableRelease?.Version);
+        var updateAvailable = _labService.IsUpdateAvailable(_installedVersion, _tlRelease?.Version);
         var readyForLatest = _installedExecutable is not null
             && _integrityResult?.BlocksLaunch != true
             && !updateAvailable;
@@ -865,6 +912,8 @@ public partial class MainWindow : Window
 
     private async void UpdateButton_Click(object sender, RoutedEventArgs e)
     {
+        if (_uiBusy || _globalTransferActive)
+            return;
         if (string.Equals(_selectedProduct, "TMC", StringComparison.OrdinalIgnoreCase))
         {
             await InstallOrUpdateTmcAsync();
@@ -897,13 +946,21 @@ public partial class MainWindow : Window
             InstallPathText.Text = $"TL sera installé dans {_labService.CanonicalInstallDirectory}.";
         }
 
-        if (_stableRelease is null)
+        var release = _tlRelease;
+        if (release is null || !string.Equals(release.Channel, _settingsService.Current.TlReleaseChannel, StringComparison.OrdinalIgnoreCase))
         {
-            MessageBox.Show("Aucune release stable n’est chargée.", "Taikeron Launcher", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show("Aucune version du canal TL sélectionné n’est disponible.", "Taikeron Launcher", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
-        BeginGlobalTransfer("TL", _stableRelease.Version, $"Téléchargement de TL {_stableRelease.Version}…");
+        if (TlDowngradeAvailable &&
+            MessageBox.Show(
+                $"Revenir de TL {_installedVersion} à {release.Version} ?\n\n" +
+                "Data, Vault et Maps restent en place, mais leur compatibilité avec une ancienne version n’est pas garantie. Effectue une sauvegarde avant de continuer.",
+                "Retour à une version antérieure", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) != MessageBoxResult.Yes)
+            return;
+
+        BeginGlobalTransfer("TL", release.Version, $"Téléchargement de TL {release.Version}…");
         SetBusy(true);
 
         try
@@ -912,10 +969,10 @@ public partial class MainWindow : Window
             {
                 ReportGlobalTransfer(
                     value,
-                    $"Téléchargement du paquet officiel TL {_stableRelease.Version}…");
+                    $"Téléchargement du paquet officiel TL {release.Version}…");
             });
 
-            var packagePath = await _labService.DownloadAndVerifyAsync(_stableRelease, downloadProgress);
+            var packagePath = await _labService.DownloadAndVerifyAsync(release, downloadProgress);
             SetGlobalTransferStage(
                 "Paquet TL vérifié. Remplacement propre du runtime…",
                 indeterminate: true);
@@ -927,7 +984,7 @@ public partial class MainWindow : Window
 
             var result = await _updateWorkerService.ReplaceAsync(
                 packagePath,
-                _stableRelease,
+                release,
                 _installedExecutable,
                 _installedVersion,
                 workerProgress);
@@ -959,10 +1016,10 @@ public partial class MainWindow : Window
                 ? "Le nouveau runtime correspond au manifeste d’intégrité officiel."
                 : "Le paquet officiel a été vérifié et installé proprement ; cette version ne dispose pas encore d’un manifeste d’intégrité fichier par fichier.";
 
-            CompleteGlobalTransfer(true, $"TL {_stableRelease.Version} installé et vérifié.");
+            CompleteGlobalTransfer(true, $"TL {release.Version} installé et vérifié.");
 
             MessageBox.Show(
-                $"Taikeron Lab {_stableRelease.Version} a été installé proprement.\n\n" +
+                $"Taikeron Lab {release.Version} a été installé proprement.\n\n" +
                 "L’ancien dossier code a été supprimé avant l’installation du nouveau runtime.\n" +
                 verification,
                 "Mise à jour TL terminée",
@@ -1318,6 +1375,8 @@ public partial class MainWindow : Window
 
     private async void RefreshButton_Click(object sender, RoutedEventArgs e)
     {
+        if (_uiBusy || _globalTransferActive)
+            return;
         if (string.Equals(_selectedProduct, "TMC", StringComparison.OrdinalIgnoreCase))
         {
             RefreshButton.IsEnabled = false;
@@ -1414,6 +1473,8 @@ public partial class MainWindow : Window
 
     private async void SettingsButton_Click(object sender, RoutedEventArgs e)
     {
+        if (_uiBusy || _globalTransferActive)
+            return;
         var window = new StorageSettingsWindow(_settingsService, _backupService)
         {
             Owner = this
@@ -1519,7 +1580,7 @@ public partial class MainWindow : Window
 
         _installedExecutable = _labService.FindInstalledExecutable();
         _installedVersion = _labService.GetInstalledVersion(_installedExecutable);
-        _stableRelease = await _labService.GetStableReleaseAsync(forceRefresh: true);
+        _tlRelease = await _labService.GetReleaseAsync(_settingsService.Current.TlReleaseChannel, forceRefresh: true);
         _integrityResult = await CheckIntegrityBackgroundAsync();
     }
 
@@ -1540,11 +1601,11 @@ public partial class MainWindow : Window
         {
             var manifest = await _integrityService.GetManifestForInstalledVersionAsync(
                 _installedVersion,
-                _stableRelease);
+                _tlRelease);
             return await _integrityService.VerifyAsync(
                 _installedExecutable,
                 _installedVersion,
-                _stableRelease,
+                _tlRelease,
                 manifest,
                 progress: null);
         }
@@ -1596,6 +1657,8 @@ public partial class MainWindow : Window
 
     private void SetBusy(bool busy, string? text = null)
     {
+        _uiBusy = busy;
+        TlChannelSelector.IsEnabled = !busy && !_globalTransferActive;
         if (busy)
         {
             LaunchButton.IsEnabled = false;
@@ -1630,10 +1693,10 @@ public partial class MainWindow : Window
         }
         else
         {
-            UpdateButton.IsEnabled = _stableRelease is not null;
+            UpdateButton.IsEnabled = _tlRelease is not null;
             RepairActionButton.IsEnabled = true;
             UninstallButton.IsEnabled = true;
-            ApplyLaunchButtonState(_labService.IsUpdateAvailable(_installedVersion, _stableRelease?.Version));
+            ApplyLaunchButtonState(_labService.IsUpdateAvailable(_installedVersion, _tlRelease?.Version));
         }
 
         if (!string.IsNullOrWhiteSpace(text))

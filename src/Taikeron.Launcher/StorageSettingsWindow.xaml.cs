@@ -196,6 +196,7 @@ public partial class StorageSettingsWindow : Window
             var current = _settingsService.Current;
             return new LauncherSettings
             {
+                TlReleaseChannel = current.TlReleaseChannel,
                 AppsRoot = apps,
                 DataRoot = data,
                 VaultRoot = vault,

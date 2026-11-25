@@ -11,6 +11,9 @@ public sealed class TlIntegrityService
     public const string StableIntegrityManifestUrl =
         "https://taikeron-cyclingos.github.io/releases/tl/integrity-stable.json";
 
+    public const string BetaIntegrityManifestUrl =
+        "https://taikeron-cyclingos.github.io/releases/tl/integrity-beta.json";
+
     private const string VersionedIntegrityBaseUrl =
         "https://taikeron-cyclingos.github.io/releases/tl/integrity";
 
@@ -33,8 +36,21 @@ public sealed class TlIntegrityService
         if (versioned is not null)
             return versioned;
 
-        if (string.Equals(normalized, NormalizeVersion(officialRelease?.Version), StringComparison.OrdinalIgnoreCase))
-            return await GetManifestAsync(StableIntegrityManifestUrl, cancellationToken);
+        if (officialRelease is not null &&
+            string.Equals(normalized, NormalizeVersion(officialRelease.Version), StringComparison.OrdinalIgnoreCase))
+        {
+            var url = officialRelease.Channel switch
+            {
+                "stable" => StableIntegrityManifestUrl,
+                "beta" => BetaIntegrityManifestUrl,
+                _ => throw new InvalidDataException("Canal d’intégrité TL inconnu.")
+            };
+            var channelManifest = await GetManifestAsync(url, cancellationToken);
+            if (channelManifest is not null &&
+                !string.Equals(channelManifest.Channel, officialRelease.Channel, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Référence d’intégrité du mauvais canal TL.");
+            return channelManifest;
+        }
 
         return null;
     }
