@@ -159,71 +159,84 @@ public partial class MainWindow : Window
         UninstallButton.Content = "✕  Désinstaller TMC";
     }
 
-    private async Task<bool> CheckLauncherSelfUpdateAsync()
-    {
-        LauncherSelfUpdateButton.Visibility = Visibility.Collapsed;
+    private bool _launcherCheckActive;
 
+    private async Task<bool> CheckLauncherSelfUpdateAsync(bool interactive = false)
+    {
+        if (_launcherCheckActive || _uiBusy || _globalTransferActive)
+            return false;
+
+        _launcherCheckActive = true;
+        LauncherSelfUpdateButton.IsEnabled = false;
+        LauncherSelfUpdateButton.Content = "↻  Vérification…";
         try
         {
-            _launcherRelease = await _launcherSelfUpdateService.GetLatestReleaseAsync();
+            using var checkTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+            _launcherRelease = await _launcherSelfUpdateService.GetLatestReleaseAsync(checkTimeout.Token);
+            if (_launcherRelease is null)
+                throw new InvalidOperationException("Aucune référence officielle exploitable pour le Launcher.");
+
             if (!_launcherSelfUpdateService.IsUpdateAvailable(_launcherRelease))
+            {
+                LauncherSelfUpdateButton.Content = "↻  MàJ Launcher";
+                if (interactive)
+                    MessageBox.Show($"Launcher {_launcherSelfUpdateService.CurrentVersion} est à jour.",
+                        "Mise à jour du Launcher", MessageBoxButton.OK, MessageBoxImage.Information);
+                return false;
+            }
+
+            var release = _launcherRelease;
+            LauncherSelfUpdateButton.Content = $"↑  Launcher {release.Version}";
+            if (_uiBusy || _globalTransferActive)
                 return false;
 
-            LauncherSelfUpdateButton.Content = $"↑  Réessayer Launcher {_launcherRelease!.Version}";
-            LauncherSelfUpdateButton.Visibility = Visibility.Collapsed;
-            LauncherSelfUpdateButton.IsEnabled = false;
+            if (interactive && MessageBox.Show(
+                $"Launcher {_launcherSelfUpdateService.CurrentVersion} → {release.Version}\\n\\n" +
+                $"Téléchargement : {FormatBytes(release.Package.Bytes)}. Installer maintenant ?",
+                "Mise à jour du Launcher", MessageBoxButton.YesNo, MessageBoxImage.Question,
+                MessageBoxResult.Yes) != MessageBoxResult.Yes)
+                return false;
 
             try
             {
-                await RunLauncherUpdateAsync(_launcherRelease);
-
-                ActivityText.Text = $"Launcher {_launcherRelease.Version} vérifié. Redémarrage automatique…";
+                await RunLauncherUpdateAsync(release);
+                ActivityText.Text = $"Launcher {release.Version} vérifié. Redémarrage automatique…";
                 Application.Current.Shutdown();
                 return true;
             }
             catch (Exception ex)
             {
-                // Le Launcher reste utilisable si l'auto-update échoue. Le bouton
-                // devient alors un secours manuel pour réessayer sans bloquer TL.
-                LauncherSelfUpdateButton.Content = $"↑  Réessayer Launcher {_launcherRelease.Version}";
-                LauncherSelfUpdateButton.Visibility = Visibility.Visible;
-                LauncherSelfUpdateButton.IsEnabled = true;
-                SetBusy(false);
-                ActivityText.Text = $"Auto-update Launcher impossible : {ex.Message}";
+                ActivityText.Text = ex is OperationCanceledException
+                    ? "Mise à jour Launcher annulée. Réessai possible."
+                    : $"Échec de mise à jour du Launcher : {ex.Message}";
+                if (interactive && ex is not OperationCanceledException)
+                    MessageBox.Show(ex.Message, "Échec de mise à jour du Launcher",
+                        MessageBoxButton.OK, MessageBoxImage.Error);
                 return false;
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // Une panne réseau du canal Launcher ne doit pas empêcher TL de fonctionner.
             _launcherRelease = null;
-            LauncherSelfUpdateButton.Visibility = Visibility.Collapsed;
+            LauncherSelfUpdateButton.Content = "↻  MàJ Launcher";
+            var message = ex is OperationCanceledException
+                ? "Le serveur de mise à jour ne répond pas dans le délai imparti. Réessaie."
+                : ex.Message;
+            if (interactive)
+                MessageBox.Show(message, "Vérification du Launcher impossible",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
             return false;
+        }
+        finally
+        {
+            _launcherCheckActive = false;
+            LauncherSelfUpdateButton.IsEnabled = !_uiBusy && !_globalTransferActive;
         }
     }
 
     private async void LauncherSelfUpdateButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_uiBusy || _globalTransferActive || _launcherRelease is null ||
-            !_launcherSelfUpdateService.IsUpdateAvailable(_launcherRelease))
-            return;
-
-        try
-        {
-            LauncherSelfUpdateButton.IsEnabled = false;
-            await RunLauncherUpdateAsync(_launcherRelease);
-
-            ActivityText.Text = "Mise à jour Launcher préparée. Fermeture pour remplacement…";
-            Application.Current.Shutdown();
-        }
-        catch (Exception ex)
-        {
-            LauncherSelfUpdateButton.IsEnabled = true;
-            SetBusy(false);
-            ActivityText.Text = $"Échec de mise à jour du Launcher : {ex.Message}";
-            if (ex is not OperationCanceledException)
-                MessageBox.Show(ex.Message, "Échec de mise à jour du Launcher", MessageBoxButton.OK, MessageBoxImage.Error);
-        }
+        await CheckLauncherSelfUpdateAsync(interactive: true);
     }
 
     private async Task RunLauncherUpdateAsync(LauncherReleaseInfo release)
@@ -1713,6 +1726,7 @@ public partial class MainWindow : Window
     {
         _uiBusy = busy;
         TlChannelSelector.IsEnabled = !busy && !_globalTransferActive;
+        LauncherSelfUpdateButton.IsEnabled = !busy && !_globalTransferActive && !_launcherCheckActive;
         if (busy)
         {
             LaunchButton.IsEnabled = false;

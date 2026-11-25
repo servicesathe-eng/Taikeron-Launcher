@@ -18,7 +18,7 @@
         <Border Grid.Row="0" Background="#06131D" BorderBrush="#263746" BorderThickness="0,0,0,1">
             <Grid Margin="22,0">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="250"/>
+                    <ColumnDefinition Width="180"/>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
@@ -40,11 +40,12 @@
 
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                     <Button x:Name="LauncherSelfUpdateButton"
-                            Content="↑  Mettre à jour le Launcher"
+                            Content="↻  MàJ Launcher"
+                            ToolTip="Vérifier la mise à jour du Launcher"
+                            AutomationProperties.Name="Vérifier la mise à jour du Launcher"
                             Style="{StaticResource ActionButton}"
                             Margin="0,0,10,0"
                             Padding="11,6"
-                            Visibility="Collapsed"
                             Click="LauncherSelfUpdateButton_Click"/>
                     <TextBlock x:Name="LauncherVersionText"
                                Text="v—"
