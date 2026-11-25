@@ -124,9 +124,9 @@ public sealed class TaikeronMapBuilderService
             manifest.Channel, manifest.Version, "TMB");
         if (manifest.WindowsX64Portable is null)
             throw new InvalidDataException("Plateforme obligatoire absente du manifeste TMB.");
-        ReleaseManifestAdmission.Package(manifest.File, manifest.Url, manifest.Sha256, manifest.Bytes);
+        ReleaseManifestAdmission.Package(manifest.File, manifest.Url, manifest.Sha256, manifest.Bytes, "TMB", manifest.Version);
         if (manifest.WindowsX64Nsis is { } nsis)
-            ReleaseManifestAdmission.Package(nsis.FileName, nsis.Url, nsis.Sha256, nsis.Bytes);
+            ReleaseManifestAdmission.Package(nsis.FileName, nsis.Url, nsis.Sha256, nsis.Bytes, "TMB", manifest.Version);
 
         return manifest;
     }
@@ -232,6 +232,9 @@ public sealed class TaikeronMapBuilderService
     {
         if (release.WindowsX64Portable is null)
             throw new InvalidOperationException("Portable TMB windows-x64 absent du manifeste.");
+
+        ReleaseManifestAdmission.Header(release.Format, release.SchemaVersion, release.Product, release.Channel, release.Version, "TMB");
+        ReleaseManifestAdmission.Package(release.File, release.Url, release.Sha256, release.Bytes, "TMB", release.Version);
 
         if (string.IsNullOrWhiteSpace(release.Url))
             throw new InvalidOperationException("Le manifeste TMB ne contient pas d’URL de téléchargement.");

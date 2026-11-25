@@ -139,7 +139,7 @@ public sealed class TaikeronLabService
             manifest.Channel, manifest.Version, "TL");
         if (manifest.WindowsX64 is null)
             throw new InvalidDataException("Plateforme obligatoire absente du manifeste TL.");
-        ReleaseManifestAdmission.Package(manifest.File, manifest.Url, manifest.Sha256, manifest.Bytes);
+        ReleaseManifestAdmission.Package(manifest.File, manifest.Url, manifest.Sha256, manifest.Bytes, "TL", manifest.Version);
 
         return manifest;
     }
@@ -447,6 +447,9 @@ public sealed class TaikeronLabService
         IProgress<double>? progress = null,
         CancellationToken cancellationToken = default)
     {
+        ReleaseManifestAdmission.Header(release.Format, release.SchemaVersion, release.Product, release.Channel, release.Version, "TL");
+        ReleaseManifestAdmission.Package(release.File, release.Url, release.Sha256, release.Bytes, "TL", release.Version);
+
         if (string.IsNullOrWhiteSpace(release.Url))
             throw new InvalidOperationException("Le manifeste TL ne contient pas d’URL de téléchargement.");
         if (string.IsNullOrWhiteSpace(release.Sha256))

@@ -124,9 +124,9 @@ public sealed class TaikeronMapChooserService
             manifest.Channel, manifest.Version, "TMC");
         if (manifest.WindowsX64Portable is null)
             throw new InvalidDataException("Plateforme obligatoire absente du manifeste TMC.");
-        ReleaseManifestAdmission.Package(manifest.File, manifest.Url, manifest.Sha256, manifest.Bytes);
+        ReleaseManifestAdmission.Package(manifest.File, manifest.Url, manifest.Sha256, manifest.Bytes, "TMC", manifest.Version);
         if (manifest.WindowsX64Nsis is { } nsis)
-            ReleaseManifestAdmission.Package(nsis.FileName, nsis.Url, nsis.Sha256, nsis.Bytes);
+            ReleaseManifestAdmission.Package(nsis.FileName, nsis.Url, nsis.Sha256, nsis.Bytes, "TMC", manifest.Version);
 
         return manifest;
     }
@@ -232,6 +232,9 @@ public sealed class TaikeronMapChooserService
     {
         if (release.WindowsX64Portable is null)
             throw new InvalidOperationException("Portable TMC windows-x64 absent du manifeste.");
+
+        ReleaseManifestAdmission.Header(release.Format, release.SchemaVersion, release.Product, release.Channel, release.Version, "TMC");
+        ReleaseManifestAdmission.Package(release.File, release.Url, release.Sha256, release.Bytes, "TMC", release.Version);
 
         if (string.IsNullOrWhiteSpace(release.Url))
             throw new InvalidOperationException("Le manifeste TMC ne contient pas d’URL de téléchargement.");
