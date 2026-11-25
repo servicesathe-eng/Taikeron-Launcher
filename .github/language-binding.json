@@ -3,7 +3,7 @@
   "productId": "Launcher",
   "repository": "servicesathe-eng/Taikeron-Launcher",
   "registryVersion": "1.4.0",
-  "lockBlobSha": "94f230c9c111116cb5d04198e137c07a9dfde36a",
+  "lockBlobSha": "e437a07ff95c649477fea75fc86414d10cb0594f",
   "contractIds": [
     "distribution.manifests",
     "maps.format",
