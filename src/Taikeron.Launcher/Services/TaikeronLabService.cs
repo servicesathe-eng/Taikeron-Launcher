@@ -132,11 +132,14 @@ public sealed class TaikeronLabService
             PropertyNameCaseInsensitive = true
         }, cancellationToken);
 
-        if (manifest is null || !manifest.Available || manifest.WindowsX64 is null)
+        if (manifest is null || !manifest.Available)
             return manifest;
 
-        if (string.IsNullOrWhiteSpace(manifest.Url) || string.IsNullOrWhiteSpace(manifest.Sha256))
-            throw new InvalidDataException("Le manifeste stable TL ne contient pas de paquet windows-x64 vérifiable.");
+        ReleaseManifestAdmission.Header(manifest.Format, manifest.SchemaVersion, manifest.Product,
+            manifest.Channel, manifest.Version, "TL");
+        if (manifest.WindowsX64 is null)
+            throw new InvalidDataException("Plateforme obligatoire absente du manifeste TL.");
+        ReleaseManifestAdmission.Package(manifest.File, manifest.Url, manifest.Sha256, manifest.Bytes);
 
         return manifest;
     }
