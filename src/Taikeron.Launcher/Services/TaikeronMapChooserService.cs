@@ -120,17 +120,13 @@ public sealed class TaikeronMapChooserService
         if (manifest is null || !manifest.Available)
             return manifest;
 
-        if (!string.Equals(manifest.Product, "TMC", StringComparison.OrdinalIgnoreCase))
-            throw new InvalidDataException("Le manifeste stable reçu ne concerne pas TMC.");
-
-        if (manifest.WindowsX64Portable is null
-            || string.IsNullOrWhiteSpace(manifest.Url)
-            || string.IsNullOrWhiteSpace(manifest.Sha256)
-            || manifest.Bytes <= 0)
-        {
-            throw new InvalidDataException(
-                "Le manifeste stable TMC ne contient pas de portable windows-x64 vérifiable.");
-        }
+        ReleaseManifestAdmission.Header(manifest.Format, manifest.SchemaVersion, manifest.Product,
+            manifest.Channel, manifest.Version, "TMC");
+        if (manifest.WindowsX64Portable is null)
+            throw new InvalidDataException("Plateforme obligatoire absente du manifeste TMC.");
+        ReleaseManifestAdmission.Package(manifest.File, manifest.Url, manifest.Sha256, manifest.Bytes);
+        if (manifest.WindowsX64Nsis is { } nsis)
+            ReleaseManifestAdmission.Package(nsis.FileName, nsis.Url, nsis.Sha256, nsis.Bytes);
 
         return manifest;
     }
