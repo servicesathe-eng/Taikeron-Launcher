@@ -37,6 +37,7 @@ public partial class MainWindow : Window
     private bool _globalTransferActive;
     private bool _uiBusy;
     private bool _channelReady;
+    private CancellationTokenSource? _launcherUpdateCancellation;
     private string _selectedProduct = "TL";
 
     public MainWindow()
@@ -71,7 +72,7 @@ public partial class MainWindow : Window
         if (sender is not FrameworkElement element || element.Tag is not string product)
             return;
 
-        if (_uiBusy && !_globalTransferActive)
+        if (_launcherUpdateCancellation is not null || (_uiBusy && !_globalTransferActive))
             return;
         await SelectProductAsync(product);
     }
@@ -174,9 +175,7 @@ public partial class MainWindow : Window
 
             try
             {
-                SetBusy(true, $"Mise à jour automatique du Launcher {_launcherRelease.Version}…");
-                var progress = new Progress<string>(message => ActivityText.Text = message);
-                await _launcherSelfUpdateService.PrepareAndLaunchUpdateAsync(_launcherRelease, progress);
+                await RunLauncherUpdateAsync(_launcherRelease);
 
                 ActivityText.Text = $"Launcher {_launcherRelease.Version} vérifié. Redémarrage automatique…";
                 Application.Current.Shutdown();
@@ -205,16 +204,14 @@ public partial class MainWindow : Window
 
     private async void LauncherSelfUpdateButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_launcherRelease is null || !_launcherSelfUpdateService.IsUpdateAvailable(_launcherRelease))
+        if (_uiBusy || _globalTransferActive || _launcherRelease is null ||
+            !_launcherSelfUpdateService.IsUpdateAvailable(_launcherRelease))
             return;
 
         try
         {
-            SetBusy(true, $"Préparation du Launcher {_launcherRelease.Version}…");
             LauncherSelfUpdateButton.IsEnabled = false;
-
-            var progress = new Progress<string>(message => ActivityText.Text = message);
-            await _launcherSelfUpdateService.PrepareAndLaunchUpdateAsync(_launcherRelease, progress);
+            await RunLauncherUpdateAsync(_launcherRelease);
 
             ActivityText.Text = "Mise à jour Launcher préparée. Fermeture pour remplacement…";
             Application.Current.Shutdown();
@@ -224,12 +221,69 @@ public partial class MainWindow : Window
             LauncherSelfUpdateButton.IsEnabled = true;
             SetBusy(false);
             ActivityText.Text = $"Échec de mise à jour du Launcher : {ex.Message}";
-            MessageBox.Show(
-                ex.Message,
-                "Échec de mise à jour du Launcher",
-                MessageBoxButton.OK,
-                MessageBoxImage.Error);
+            if (ex is not OperationCanceledException)
+                MessageBox.Show(ex.Message, "Échec de mise à jour du Launcher", MessageBoxButton.OK, MessageBoxImage.Error);
         }
+    }
+
+    private async Task RunLauncherUpdateAsync(LauncherReleaseInfo release)
+    {
+        using var cancellation = new CancellationTokenSource();
+        _launcherUpdateCancellation = cancellation;
+        BeginGlobalTransfer("Launcher", release.Version, "Connexion à GitHub…");
+        SetBusy(true);
+        CancelLauncherUpdateButton.Visibility = Visibility.Visible;
+        CancelLauncherUpdateButton.IsEnabled = true;
+
+        // Both progress streams use the same dispatcher, and stale messages
+        // from a finished attempt must not overwrite a different transfer.
+        var phases = new Progress<string>(message =>
+        {
+            if (_launcherUpdateCancellation != cancellation) return;
+            ActivityText.Text = message;
+            SetGlobalTransferStage(message, indeterminate: true);
+        });
+        var downloads = new Progress<LauncherDownloadProgress>(item =>
+        {
+            if (_launcherUpdateCancellation != cancellation) return;
+            var isPackage = item.Label == "Paquet Launcher";
+            var ratio = (double)item.Received / item.Total;
+            var stage = $"{item.Label} · {FormatBytes(item.Received)} / {FormatBytes(item.Total)} · " +
+                        $"{FormatBytes((long)item.BytesPerSecond)}/s · tentative {item.Attempt}/{item.MaxAttempts}";
+            if (item.Notice is not null) stage += $" · {item.Notice}";
+            ActivityText.Text = stage;
+            ReportGlobalTransfer(isPackage ? ratio : 1, stage);
+        });
+
+        try
+        {
+            await _launcherSelfUpdateService.PrepareAndLaunchUpdateAsync(
+                release, phases, cancellation.Token, downloads);
+            CompleteGlobalTransfer(true, "Launcher vérifié · redémarrage automatique.");
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+        {
+            CompleteGlobalTransfer(false, "Mise à jour annulée. Le Launcher actuel reste utilisable.");
+            TransferPercentText.Text = "Annulé";
+            throw;
+        }
+        catch (Exception ex)
+        {
+            CompleteGlobalTransfer(false, $"Échec Launcher : {ex.Message}");
+            throw;
+        }
+        finally
+        {
+            _launcherUpdateCancellation = null;
+            CancelLauncherUpdateButton.Visibility = Visibility.Collapsed;
+            SetBusy(false);
+        }
+    }
+
+    private void CancelLauncherUpdateButton_Click(object sender, RoutedEventArgs e)
+    {
+        CancelLauncherUpdateButton.IsEnabled = false;
+        _launcherUpdateCancellation?.Cancel();
     }
 
     private async void TlChannelSelector_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)

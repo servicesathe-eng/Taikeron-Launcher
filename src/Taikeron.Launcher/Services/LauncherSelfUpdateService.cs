@@ -21,7 +21,7 @@ public sealed class LauncherSelfUpdateService
 
     private readonly HttpClient _httpClient = new()
     {
-        Timeout = TimeSpan.FromMinutes(10)
+        Timeout = TimeSpan.FromSeconds(45)
     };
 
     public LauncherSelfUpdateService()
@@ -90,7 +90,8 @@ public sealed class LauncherSelfUpdateService
     public async Task PrepareAndLaunchUpdateAsync(
         LauncherReleaseInfo release,
         IProgress<string>? progress = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IProgress<LauncherDownloadProgress>? downloadProgress = null)
     {
         if (!IsUpdateAvailable(release))
             throw new InvalidOperationException("Aucune mise à jour du Launcher n’est nécessaire.");
@@ -117,8 +118,10 @@ public sealed class LauncherSelfUpdateService
         var stagingDirectory = Path.Combine(jobDirectory, "staging");
 
         progress?.Report($"Téléchargement du Launcher {release.Version}…");
-        await DownloadAsync(release.Package.Url, packagePath, release.Package.Bytes, cancellationToken);
-        await DownloadAsync(release.Sha256File.Url, shaPath, release.Sha256File.Bytes, cancellationToken);
+        await LauncherUpdateDownload.DownloadAsync(_httpClient, release.Package.Url, packagePath,
+            release.Package.Bytes, "Paquet Launcher", downloadProgress, cancellationToken);
+        await LauncherUpdateDownload.DownloadAsync(_httpClient, release.Sha256File.Url, shaPath,
+            release.Sha256File.Bytes, "Empreinte SHA-256", downloadProgress, cancellationToken);
 
         progress?.Report("Vérification SHA-256 du nouveau Launcher…");
         var shaText = await File.ReadAllTextAsync(shaPath, cancellationToken);
@@ -133,7 +136,8 @@ public sealed class LauncherSelfUpdateService
 
         progress?.Report("Préparation de la nouvelle version…");
         Directory.CreateDirectory(stagingDirectory);
-        ZipFile.ExtractToDirectory(packagePath, stagingDirectory, overwriteFiles: true);
+        await Task.Run(() => ZipFile.ExtractToDirectory(packagePath, stagingDirectory, overwriteFiles: true), cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
 
         var stagedMarker = Path.Combine(stagingDirectory, RootMarker);
         var stagedLauncher = Path.Combine(stagingDirectory, LauncherExe);
@@ -192,36 +196,9 @@ public sealed class LauncherSelfUpdateService
         };
         startInfo.ArgumentList.Add(requestFile);
 
+        cancellationToken.ThrowIfCancellationRequested();
         _ = Process.Start(startInfo)
             ?? throw new InvalidOperationException("Impossible de démarrer le worker d’auto-mise à jour du Launcher.");
-    }
-
-    private async Task DownloadAsync(
-        string url,
-        string destination,
-        long expectedBytes,
-        CancellationToken cancellationToken)
-    {
-        if (string.IsNullOrWhiteSpace(url))
-            throw new InvalidDataException("URL de release Launcher absente.");
-
-        using var response = await _httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
-        response.EnsureSuccessStatusCode();
-
-        await using var source = await response.Content.ReadAsStreamAsync(cancellationToken);
-        await using var target = new FileStream(
-            destination,
-            FileMode.Create,
-            FileAccess.Write,
-            FileShare.None,
-            1024 * 128,
-            useAsync: true);
-
-        await source.CopyToAsync(target, cancellationToken);
-        await target.FlushAsync(cancellationToken);
-
-        if (expectedBytes > 0 && new FileInfo(destination).Length != expectedBytes)
-            throw new InvalidDataException($"Taille invalide pour {Path.GetFileName(destination)}.");
     }
 
     private static async Task<string> ComputeSha256Async(string path, CancellationToken cancellationToken)

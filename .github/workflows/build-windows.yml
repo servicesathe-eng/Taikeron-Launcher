@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - 'src/**'
+      - 'tests/**'
       - 'installer/**'
       - '.github/workflows/build-windows.yml'
       - '.github/release/launcher-release.json'
@@ -138,6 +139,9 @@ jobs:
           }
 
           Write-Host 'Contrat raccourcis vérifié : les raccourcis existants sont sauvegardés puis restaurés après auto-update.'
+
+      - name: Test Launcher download progress, retry and cancellation
+        run: dotnet run --project tests/LauncherDownload.Tests/LauncherDownload.Tests.csproj -c Release
 
       - name: Build launcher
         run: dotnet build src/Taikeron.Launcher/Taikeron.Launcher.csproj -c Release -r win-x64 --no-restore
